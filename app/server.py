@@ -193,6 +193,17 @@ class Handler(BaseHTTPRequestHandler):
             disliked = _truthy(q.get("disliked", "true"))
             db.set_disliked(m[1], disliked)
             return self._json({"ok": True, "disliked": disliked})
+        if method == "POST" and path == "/api/follow":
+            name = (q.get("name") or "").strip()
+            if not name:
+                return self._err(400, "name required")
+            if _truthy(q.get("on", "true")):
+                db.follow_artist(name)
+            else:
+                db.unfollow_artist(name)
+            return self._json({"ok": True, "following": db.is_following(name)})
+        if method == "GET" and path == "/api/artists":
+            return self._json(db.followed_artists())
         if method == "DELETE" and (m := re.fullmatch(rf"/api/library/{_VID}", path)):
             return self._json({"ok": True, "removed": cache.evict(m[1])})
         if method == "GET" and path == "/api/stats":

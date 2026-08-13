@@ -33,6 +33,7 @@ const state = {
   selecting: false,     // 已下载视图的多选(管理)模式
   selected: new Set(),  // 多选中的 track id
   radioSeed: null,      // 自动电台的锚:用户主动点的那首,续歌围绕它,不随电台漂移
+  following: new Set(), // 关注的歌手名(从 /api/artists 加载)
 };
 
 const esc = (s) =>
@@ -149,7 +150,7 @@ function rowHTML(t, i) {
     <img loading="lazy" data-art="${t.id}" alt="" onerror="this.style.visibility='hidden'">
     <div class="row-main">
       <div class="row-title">${esc(t.title)}${pill}</div>
-      <div class="row-artist">${esc(t.artist) || '&nbsp;'}</div>
+      <div class="row-artist">${t.artist ? `<span class="artist-link" data-artist="${esc(t.artist.split(/[,，&]/)[0].trim())}">${esc(t.artist)}</span>` : '&nbsp;'}</div>
     </div>
     <div class="row-album">${esc(t.album)}</div>
     <div class="row-dur">${fmt(t.duration)}</div>
@@ -526,17 +527,56 @@ async function loadList(tab) {
   return runRecommend(); // 发现 tab 落地为「为你推荐」
 }
 
-// 发现页顶部入口条:为你推荐 | 常用▾ | 探索更多▾
+// 歌手页:显示某歌手唱过的(含翻唱)。YouTube 搜歌手名天然混原唱+翻唱,网络歌手如 en 也搜得到。
+async function runArtist(name) {
+  if (!name) return;
+  state.tab = 'recommend';
+  state.discoverView = 'artist';
+  state.activeMode = name;
+  state.mode = 'song';
+  $('#q').value = '';
+  closeModeMenu(); renderDiscoverBar();
+  state.loading = true; state.error = null;
+  syncTabs(); render();
+  try {
+    state.lists.recommend = applyPrefs(await api(`/api/search?q=${encodeURIComponent(name)}&limit=40`));
+  } catch (e) { state.error = e.message; }
+  state.loading = false; render();
+}
+
+async function toggleFollow(name) {
+  const on = !state.following.has(name);
+  if (on) state.following.add(name); else state.following.delete(name);
+  renderDiscoverBar();
+  try { await api(`/api/follow?name=${encodeURIComponent(name)}&on=${on}`, { method: 'POST' }); } catch {}
+}
+
+async function loadFollowing() {
+  try { state.following = new Set(await api('/api/artists')); } catch {}
+}
+
+// 发现页顶部入口条:为你推荐 | 常用▾ | 探索更多▾ | 关注▾(有关注时)
 function renderDiscoverBar() {
   const box = $('#discover');
   box.hidden = state.tab !== 'recommend';
   if (box.hidden) return;
+  // 歌手页:返回 + 歌手名 + 关注按钮
+  if (state.discoverView === 'artist') {
+    const name = state.activeMode || '';
+    const on = state.following.has(name);
+    box.innerHTML =
+      `<button class="scene" data-view="recommend">‹ 发现</button>` +
+      `<button class="scene artist-name">🎤 ${esc(name)}</button>` +
+      `<button class="scene follow${on ? ' on' : ''}" data-follow="${esc(name)}">${on ? '已关注' : '＋ 关注'}</button>`;
+    return;
+  }
   const inCommon = state.discoverView === 'mode' && COMMON_MODES.some((m) => m.label === state.activeMode);
   const inExplore = state.discoverView === 'mode' && EXPLORE_MODES.some((m) => m.label === state.activeMode);
   box.innerHTML =
     `<button class="scene${state.discoverView === 'recommend' ? ' on' : ''}" data-view="recommend">为你推荐</button>` +
     `<button class="scene${inCommon ? ' on' : ''}" data-menu="common">常用 ▾</button>` +
-    `<button class="scene${inExplore ? ' on' : ''}" data-menu="explore">探索更多 ▾</button>`;
+    `<button class="scene${inExplore ? ' on' : ''}" data-menu="explore">探索更多 ▾</button>` +
+    (state.following.size ? `<button class="scene" data-menu="following">关注 ▾</button>` : '');
 }
 
 // 展开「常用 / 探索更多」的模式下拉;再点同一个入口收起
@@ -544,7 +584,9 @@ function openModeMenu(which) {
   const menu = $('#modemenu');
   if (!menu) return;
   if (!menu.hidden && menu.dataset.which === which) { closeModeMenu(); return; }
-  const list = which === 'common' ? COMMON_MODES : EXPLORE_MODES;
+  const list = which === 'common' ? COMMON_MODES
+             : which === 'explore' ? EXPLORE_MODES
+             : [...state.following].map((n) => ({ label: n })); // 关注的歌手
   menu.dataset.which = which;
   menu.innerHTML = list.map((m, i) =>
     `<button class="modeitem${m.label === state.activeMode ? ' on' : ''}" data-mode="${which}:${i}">` +
@@ -1235,14 +1277,17 @@ $('#importbar').addEventListener('submit', (e) => {
 $('#discover').addEventListener('click', (e) => {
   const view = e.target.closest('[data-view]');
   const menu = e.target.closest('[data-menu]');
-  if (view) runRecommend();
+  const follow = e.target.closest('[data-follow]');
+  if (follow) toggleFollow(follow.dataset.follow);
+  else if (view) runRecommend();
   else if (menu) openModeMenu(menu.dataset.menu);
 });
 $('#modemenu').addEventListener('click', (e) => {
   const it = e.target.closest('[data-mode]');
   if (!it) return;
   const [which, i] = it.dataset.mode.split(':');
-  runMode((which === 'common' ? COMMON_MODES : EXPLORE_MODES)[+i]);
+  if (which === 'following') runArtist([...state.following][+i]);
+  else runMode((which === 'common' ? COMMON_MODES : EXPLORE_MODES)[+i]);
 });
 // 点入口和下拉以外的地方,收起模式菜单
 document.addEventListener('click', (e) => {
@@ -1332,6 +1377,8 @@ $('#list').addEventListener('click', async (e) => {
     refreshStats();
     return;
   }
+  const artistLink = e.target.closest('[data-artist]');
+  if (artistLink) { e.stopPropagation(); runArtist(artistLink.dataset.artist); return; }
   const row = e.target.closest('.row');
   if (row) playFrom(state.lists[state.tab], +row.dataset.i);
 });
@@ -1464,6 +1511,7 @@ function load() {
 (async () => {
   loadPrefs();
   load();
+  loadFollowing();
   initMediaSession();
   renderNP();
 

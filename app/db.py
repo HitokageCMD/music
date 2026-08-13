@@ -52,6 +52,11 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
     PRIMARY KEY (playlist_id, track_id)
 );
 CREATE INDEX IF NOT EXISTS idx_pltracks ON playlist_tracks(playlist_id, pos);
+
+CREATE TABLE IF NOT EXISTS followed_artists (
+    name        TEXT PRIMARY KEY,
+    followed_at INTEGER DEFAULT 0
+);
 """
 
 # Columns added after the tracks table already shipped; ALTER on old DBs.
@@ -281,6 +286,24 @@ def set_disliked(vid: str, disliked: bool) -> None:
 
 def disliked_ids() -> set[str]:
     return {r["id"] for r in conn().execute("SELECT id FROM tracks WHERE disliked=1")}
+
+
+def follow_artist(name: str) -> None:
+    _write("INSERT OR IGNORE INTO followed_artists (name, followed_at) VALUES (?, ?)",
+           (name, int(time.time())))
+
+
+def unfollow_artist(name: str) -> None:
+    _write("DELETE FROM followed_artists WHERE name=?", (name,))
+
+
+def followed_artists() -> list[str]:
+    return [r["name"] for r in
+            conn().execute("SELECT name FROM followed_artists ORDER BY followed_at DESC")]
+
+
+def is_following(name: str) -> bool:
+    return conn().execute("SELECT 1 FROM followed_artists WHERE name=?", (name,)).fetchone() is not None
 
 
 def get_track(vid: str) -> dict | None:

@@ -209,6 +209,12 @@ header {
 .rowsel.on::after { content: '✓'; color: #fff; font-size: 12px; line-height: 18px; display: block; text-align: center; }
 .row.selected { background: var(--accent-dim); }
 
+/* 歌手页 / 关注 */
+.scene.artist-name { pointer-events: none; font-weight: 600; }
+.scene.follow.on { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+.artist-link { cursor: pointer; }
+.artist-link:hover { color: var(--text); text-decoration: underline; }
+
 /* sub-filters: a quieter, secondary row under the main tabs */
 .subfilters {
   position: sticky; top: calc(var(--header-h) + var(--tabs-h)); z-index: 18;
