@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     ext         TEXT DEFAULT 'm4a',
     cached      INTEGER DEFAULT 0,
     liked       INTEGER DEFAULT 0,
+    disliked    INTEGER DEFAULT 0,
     play_count  INTEGER DEFAULT 0,
     added_at    INTEGER DEFAULT 0,
     last_played INTEGER DEFAULT 0,
@@ -57,6 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_pltracks ON playlist_tracks(playlist_id, pos);
 _MIGRATIONS = [
     ("tracks", "source", "TEXT DEFAULT 'yt'"),
     ("tracks", "page_url", "TEXT DEFAULT ''"),
+    ("tracks", "disliked", "INTEGER DEFAULT 0"),
 ]
 
 
@@ -262,7 +264,23 @@ def bump_play(vid: str) -> None:
 
 
 def set_liked(vid: str, liked: bool) -> None:
-    _write("UPDATE tracks SET liked=? WHERE id=?", (1 if liked else 0, vid))
+    # 喜欢和不喜欢互斥:喜欢一首歌时清掉它的不喜欢标记。
+    if liked:
+        _write("UPDATE tracks SET liked=1, disliked=0 WHERE id=?", (vid,))
+    else:
+        _write("UPDATE tracks SET liked=0 WHERE id=?", (vid,))
+
+
+def set_disliked(vid: str, disliked: bool) -> None:
+    # 不喜欢时也顺手取消喜欢/收藏,两者互斥。
+    if disliked:
+        _write("UPDATE tracks SET disliked=1, liked=0 WHERE id=?", (vid,))
+    else:
+        _write("UPDATE tracks SET disliked=0 WHERE id=?", (vid,))
+
+
+def disliked_ids() -> set[str]:
+    return {r["id"] for r in conn().execute("SELECT id FROM tracks WHERE disliked=1")}
 
 
 def get_track(vid: str) -> dict | None:
@@ -297,7 +315,7 @@ def seed_tracks(limit: int = 8) -> list[dict]:
     rows = conn().execute(
         """
         SELECT * FROM tracks
-        WHERE liked=1 OR play_count>0 OR cached=1
+        WHERE (liked=1 OR play_count>0 OR cached=1) AND disliked=0
         ORDER BY liked DESC, play_count DESC, last_played DESC
         LIMIT ?
         """,

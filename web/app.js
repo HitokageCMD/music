@@ -431,6 +431,7 @@ function renderNP() {
   $('#npArtist').textContent = t ? t.artist || '' : '搜一首歌开始';
   setArt($('#cover'), t?.id);
   $('#likeBtn').classList.toggle('on', !!t?.liked);
+  $('#dislikeBtn').classList.toggle('on', !!t?.disliked);
   $('#shuffleBtn').classList.toggle('on', state.shuffle);
   $('#repeatBtn').classList.toggle('on', state.repeat !== 'off');
   $('#repeatBtn').textContent = state.repeat === 'one' ? '↻¹' : '↻';
@@ -1285,9 +1286,21 @@ $('#likeBtn').addEventListener('click', async () => {
   if (!state.current) return;
   const liked = !state.current.liked;
   state.current.liked = liked;
+  if (liked) state.current.disliked = false; // 喜欢与不喜欢互斥
   renderNP();
   await api(`/api/like/${state.current.id}?liked=${liked}`, { method: 'POST' });
   if (state.tab === 'library' && state.libFilter === 'liked') loadLibrary();
+});
+
+// 不喜欢:标记 + 直接跳下一首;后端记下后,「为你推荐」和自动电台不再出现它
+$('#dislikeBtn').addEventListener('click', async () => {
+  if (!state.current) return;
+  const id = state.current.id;
+  state.current.disliked = true;
+  state.current.liked = false;
+  renderNP();
+  try { await api(`/api/dislike/${id}`, { method: 'POST' }); } catch {}
+  next();
 });
 
 $('#radio').addEventListener('change', (e) => { state.radio = e.target.checked; save(); });

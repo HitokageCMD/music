@@ -52,10 +52,11 @@ def _truthy(v: str | None) -> bool:
 def _annotate(results: list[dict]) -> list[dict]:
     """Remember the metadata, then flag what we already hold locally."""
     db.upsert_tracks(results)
-    have, loved = db.cached_ids(), db.liked_ids()
+    have, loved, nope = db.cached_ids(), db.liked_ids(), db.disliked_ids()
     for r in results:
         r["cached"] = r["id"] in have
         r["liked"] = r["id"] in loved
+        r["disliked"] = r["id"] in nope
     return results
 
 
@@ -133,7 +134,9 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and (m := re.fullmatch(rf"/api/lyrics/{_VID}", path)):
             return self._json(lyrics.fetch(m[1], force=_truthy(q.get("force"))))
         if method == "GET" and (m := re.fullmatch(rf"/api/related/{_VID}", path)):
-            return self._json(_annotate(ytdl.related(m[1], min(int(q.get("limit", 25)), 50))))
+            rel = ytdl.related(m[1], min(int(q.get("limit", 25)), 50))
+            nope = db.disliked_ids()
+            return self._json(_annotate([t for t in rel if t.get("id") not in nope]))
         if method == "GET" and path == "/api/recommend":
             return self._recommend(q)
         if method == "POST" and path == "/api/import":
@@ -186,6 +189,10 @@ class Handler(BaseHTTPRequestHandler):
             liked = _truthy(q.get("liked", "true"))
             db.set_liked(m[1], liked)
             return self._json({"ok": True, "liked": liked})
+        if method == "POST" and (m := re.fullmatch(rf"/api/dislike/{_VID}", path)):
+            disliked = _truthy(q.get("disliked", "true"))
+            db.set_disliked(m[1], disliked)
+            return self._json({"ok": True, "disliked": disliked})
         if method == "DELETE" and (m := re.fullmatch(rf"/api/library/{_VID}", path)):
             return self._json({"ok": True, "removed": cache.evict(m[1])})
         if method == "GET" and path == "/api/stats":

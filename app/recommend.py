@@ -44,8 +44,8 @@ def recommend(limit: int = 30) -> list[dict]:
 
 
 def _build(seeds: list[dict]) -> list[dict]:
-    # Never recommend something they already have, already like, or seeded from.
-    exclude = db.cached_ids() | db.liked_ids() | {s["id"] for s in seeds}
+    # Never recommend something they already have, already like, disliked, or seeded from.
+    exclude = db.cached_ids() | db.liked_ids() | db.disliked_ids() | {s["id"] for s in seeds}
 
     def station(seed: dict):
         return seed, ytdl.radio(seed["id"], PER_STATION)

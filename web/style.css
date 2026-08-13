@@ -486,6 +486,7 @@ main { padding: 10px 10px 28px; max-width: 1100px; margin: 0 auto; }
 .icon.small { font-size: 13px; }
 .icon.on { color: var(--accent); }
 .icon.like.on { color: var(--accent); }
+.icon.dislike.on { color: #ff6b6b; }
 
 .icon.play {
   background: var(--text); color: var(--bg);
@@ -581,7 +582,6 @@ input[type=range]::-moz-range-thumb {
   .center { flex-direction: row; gap: 0; }
   .seek { display: none; }
   #shuffleBtn { display: none; }   /* keep repeat: 单曲/列表循环 */
-  #likeBtn { display: none; }
   .controls .icon { padding: 8px 5px; }
 
   /* Thin progress line across the top of the player instead of a full seek bar. */
