@@ -300,8 +300,10 @@ def _watch(vid: str, limit: int, radio: bool) -> list[dict]:
 
 
 def related(vid: str, limit: int = 25) -> list[dict]:
-    """The 'up next' continuation — used to extend the play queue."""
-    return _watch(vid, limit, radio=False)
+    """自动续歌用的相似歌。用 radio=True 的电台(围绕种子的同风格歌),而不是
+    radio=False 的 up-next 队列 —— 后者会「演进」,放着放着就漂到不相关的老歌
+    (用户反馈:听薛之谦突然跳老歌)。电台更贴近当前这首的风格/年代。"""
+    return _watch(vid, limit, radio=True)
 
 
 def radio(vid: str, limit: int = 25) -> list[dict]:

@@ -32,6 +32,7 @@ const state = {
   sleep: { min: 60, until: 0 }, // 定时停止:min=拉条分钟数(30~300),until=截止时间戳(0=未启用)
   selecting: false,     // 已下载视图的多选(管理)模式
   selected: new Set(),  // 多选中的 track id
+  radioSeed: null,      // 自动电台的锚:用户主动点的那首,续歌围绕它,不随电台漂移
 };
 
 const esc = (s) =>
@@ -814,6 +815,7 @@ async function checkOnline() {
 function playFrom(list, i) {
   state.queue = list.slice();
   state.qi = i;
+  state.radioSeed = state.queue[i]?.id || null; // 用户主动选的歌 = 电台锚
   loadTrack(state.queue[i]);
 }
 
@@ -883,7 +885,9 @@ async function next(auto = false) {
   if (state.repeat === 'all') { state.qi = 0; loadTrack(state.queue[0]); return; }
   if (auto && state.radio && state.current) {
     try {
-      const more = applyPrefs(await api(`/api/related/${state.current.id}`));
+      // 围绕用户主动点的那首续歌(锚定),而不是队尾那首,避免越续越偏、漂到老歌
+      const seed = state.radioSeed || state.current.id;
+      const more = applyPrefs(await api(`/api/related/${seed}`));
       const have = new Set(state.queue.map((t) => t.id));
       const fresh = more.filter((t) => !have.has(t.id));
       if (fresh.length) {

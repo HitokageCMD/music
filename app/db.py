@@ -316,7 +316,7 @@ def seed_tracks(limit: int = 8) -> list[dict]:
         """
         SELECT * FROM tracks
         WHERE (liked=1 OR play_count>0 OR cached=1) AND disliked=0
-        ORDER BY liked DESC, play_count DESC, last_played DESC
+        ORDER BY last_played DESC, liked DESC, play_count DESC
         LIMIT ?
         """,
         (limit,),
