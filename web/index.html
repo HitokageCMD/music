@@ -13,8 +13,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="tunebox">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="/static/style.css?v=17">
-<script src="/static/idb.js?v=17"></script>
+<link rel="stylesheet" href="/static/style.css?v=18">
+<script src="/static/idb.js?v=18"></script>
 </head>
 <body>
 
@@ -130,6 +130,10 @@
       <div class="pref-group">
         <label class="pref-toggle"><input type="checkbox" id="radio" checked> 自动电台（放完自动接相似歌）</label>
       </div>
+      <div class="pref-group" id="permGroup" hidden>
+        <div class="pref-label">后台权限 <span class="pref-hint">锁屏控制、后台不断播需要（荣耀/华为）</span></div>
+        <div class="perm-rows" id="permRows"></div>
+      </div>
       <div class="pref-group">
         <div class="pref-label">更新 <span class="pref-hint" id="updateHint"></span></div>
         <button id="checkUpdateBtn" class="update-btn">检查更新</button>
@@ -153,6 +157,6 @@
 </section>
 
 <audio id="audio" preload="auto"></audio>
-<script src="/static/app.js?v=17"></script>
+<script src="/static/app.js?v=18"></script>
 </body>
 </html>

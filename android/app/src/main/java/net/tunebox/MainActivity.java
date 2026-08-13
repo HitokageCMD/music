@@ -1,12 +1,16 @@
 package net.tunebox;
 
 import android.Manifest;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -17,6 +21,7 @@ import android.widget.Toast;
 import androidx.activity.ComponentActivity;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationManagerCompat;
 
 import com.chaquo.python.PyObject;
 import com.chaquo.python.Python;
@@ -69,6 +74,19 @@ public class MainActivity extends ComponentActivity {
         startBackend();
     }
 
+    private void startSafe(Intent i) {
+        try { startActivity(i); } catch (Exception e) { openAppDetails(); }
+    }
+
+    private void openAppDetails() {
+        try {
+            Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + getPackageName()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Exception ignored) {}
+    }
+
     private void runJs(String js) {
         runOnUiThread(() -> { if (web != null) web.evaluateJavascript(js, null); });
 
@@ -86,6 +104,59 @@ public class MainActivity extends ComponentActivity {
         public boolean isApp() {
             return true;
         }
+        /** {"notif":bool,"battery":bool} — which background permissions are granted. */
+        @JavascriptInterface
+        public String permStatus() {
+            boolean notif = Build.VERSION.SDK_INT >= 33
+                    ? ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.POST_NOTIFICATIONS)
+                        == PackageManager.PERMISSION_GRANTED
+                    : NotificationManagerCompat.from(MainActivity.this).areNotificationsEnabled();
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            boolean battery = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+            return "{\"notif\":" + notif + ",\"battery\":" + battery + "}";
+        }
+
+        @JavascriptInterface
+        public void requestNotif() {
+            runOnUiThread(() -> {
+                if (Build.VERSION.SDK_INT >= 33 && ActivityCompat.checkSelfPermission(
+                        MainActivity.this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(MainActivity.this,
+                            new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2);
+                } else {
+                    Intent i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+                    startSafe(i);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void requestBattery() {
+            runOnUiThread(() -> startSafe(new Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + getPackageName()))));
+        }
+
+        @JavascriptInterface
+        public void openAutostart() {
+            runOnUiThread(() -> {
+                // EMUI/other auto-start managers vary; try known components, then fall back.
+                String[][] comps = {
+                    {"com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"},
+                    {"com.huawei.systemmanager", "com.huawei.systemmanager.appcontrol.activity.StartupAppControlActivity"},
+                    {"com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity"},
+                };
+                for (String[] c : comps) {
+                    Intent i = new Intent();
+                    i.setComponent(new ComponentName(c[0], c[1]));
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    try { startActivity(i); return; } catch (Exception ignored) {}
+                }
+                openAppDetails();
+            });
+        }
+
         /** JS pushes playback state here; drives the media session + notification. */
         @JavascriptInterface
         public void updateMedia(String json) {

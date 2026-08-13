@@ -278,8 +278,46 @@ function openSettings(firstRun = false) {
     $('#updateHint').textContent = '网页版刷新即最新（自更新只在 App 里）';
     btn.disabled = true;
   }
+  renderPerms();
   $('#settings').hidden = false;
 }
+
+// Background-permission section — only in the APK (needs the native bridge).
+function permState() {
+  const b = window.tunebox;
+  if (!b || !b.permStatus) return null;
+  try { return JSON.parse(b.permStatus()); } catch { return { notif: false, battery: false }; }
+}
+
+function renderPerms() {
+  const st = permState();
+  const group = $('#permGroup');
+  if (!st) { group.hidden = true; return; } // PWA — no background perms to manage
+  group.hidden = false;
+  const row = (key, label, granted) =>
+    `<div class="perm-row">
+       <div class="perm-label">${label}<span class="perm-state ${granted ? 'ok' : 'bad'}">${granted ? '已开' : '未开'}</span></div>
+       <button data-perm="${key}" class="${granted ? 'done' : ''}">${granted ? '已开' : '开启'}</button>
+     </div>`;
+  $('#permRows').innerHTML =
+    row('notif', '通知（锁屏/下拉控制）', st.notif) +
+    row('battery', '后台运行（电池优化）', st.battery) +
+    `<div class="perm-row"><div class="perm-label">自启动</div><button data-perm="autostart">去设置</button></div>`;
+}
+
+$('#permRows').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-perm]');
+  const b = window.tunebox;
+  if (!btn || !b) return;
+  if (btn.dataset.perm === 'notif') b.requestNotif && b.requestNotif();
+  else if (btn.dataset.perm === 'battery') b.requestBattery && b.requestBattery();
+  else if (btn.dataset.perm === 'autostart') b.openAutostart && b.openAutostart();
+});
+
+// Coming back from a system settings page → refresh the granted/未开 badges.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && !$('#settings').hidden) renderPerms();
+});
 
 function closeSettings() {
   $('#settings').hidden = true;
@@ -1294,8 +1332,11 @@ function load() {
   if (state.online) loadList(state.tab); // 发现 → load discover; checkOnline handles the offline landing
   refreshStats();
 
-  // First run: onboard the taste settings so discovery starts personalized.
-  if (!prefsSet()) openSettings(true);
+  // First run onboards taste; on the APK also surface settings if a background
+  // permission is missing (so lock-screen control / background play actually work).
+  const st = permState();
+  const permsMissing = st && (!st.notif || !st.battery);
+  if (!prefsSet() || permsMissing) openSettings(!prefsSet());
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});

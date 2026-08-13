@@ -160,6 +160,18 @@ header {
 .update-btn:hover { border-color: var(--muted); }
 .update-btn:disabled { opacity: .5; cursor: default; }
 
+.perm-rows { display: flex; flex-direction: column; gap: 8px; }
+.perm-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.perm-row .perm-label { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.perm-state { font-size: 11px; padding: 1.5px 7px; border-radius: 999px; }
+.perm-state.ok { background: var(--accent-dim); color: var(--accent); }
+.perm-state.bad { background: rgba(255, 110, 110, .16); color: #ff8a8a; }
+.perm-row button {
+  flex-shrink: 0; padding: 6px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 550;
+  background: var(--accent); color: var(--bg);
+}
+.perm-row button.done { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+
 /* sub-filters: a quieter, secondary row under the main tabs */
 .subfilters {
   position: sticky; top: calc(var(--header-h) + var(--tabs-h)); z-index: 18;
