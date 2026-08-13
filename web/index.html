@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0d10">
+<title>tunebox</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/icon-192.png" sizes="192x192" type="image/png">
+<!-- PNG only: iOS ignores an SVG apple-touch-icon and screenshots the page instead. -->
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="tunebox">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="/static/style.css?v=12">
+<script src="/static/idb.js?v=12"></script>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="dot"></span>tunebox</div>
+  <form id="searchForm" class="search">
+    <div class="mode" id="mode">
+      <button type="button" data-mode="song" class="on">歌名</button>
+      <button type="button" data-mode="lyrics">歌词</button>
+    </div>
+    <input id="q" type="search" placeholder="搜歌手/歌名，或粘 YouTube·B站 合集链接导入…" autocomplete="off" spellcheck="false">
+  </form>
+  <div class="stats" id="stats"></div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="recommend" class="on">发现</button>
+  <button data-tab="search">搜索</button>
+  <button data-tab="library">音乐库</button>
+  <span class="grow"></span>
+  <button id="settingsBtn" class="settings-btn" title="设置">设置</button>
+</nav>
+
+<nav class="subfilters" id="subfilters" hidden>
+  <button data-filter="all" class="on">全部</button>
+  <button data-filter="liked">收藏</button>
+  <button data-filter="phone">已下载</button>
+  <button data-filter="playlists">歌单</button>
+  <span class="grow"></span>
+  <button id="saveAll" class="save-all" hidden title="把曲库整批存到这台设备">全部下载</button>
+</nav>
+
+<form class="importbar" id="importbar" hidden>
+  <input id="importUrl" type="url" placeholder="粘贴 YouTube / B站 合集链接，导入成清单…" autocomplete="off">
+  <button id="importBtn" type="submit">导入</button>
+</form>
+
+<section id="scenes" class="scenes" hidden></section>
+<section id="discover" class="scenes" hidden></section>
+
+<main id="list"></main>
+
+<section class="stage" id="stage" hidden>
+  <button class="stage-close" id="stageClose" title="收起 (Esc)">▾</button>
+  <div class="stage-art">
+    <img id="stageCover" alt="">
+    <div class="stage-meta">
+      <div class="stage-title" id="stageTitle"></div>
+      <div class="stage-artist" id="stageArtist"></div>
+      <div class="stage-src" id="stageSrc"></div>
+    </div>
+  </div>
+  <div class="stage-lyrics" id="lyrics"></div>
+</section>
+
+<footer class="player" id="player">
+  <div class="np">
+    <img id="cover" alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E">
+    <div class="np-text">
+      <div class="np-title" id="npTitle">还没在放什么</div>
+      <div class="np-artist" id="npArtist">搜一首歌开始</div>
+    </div>
+    <button id="lyricBtn" class="icon lyric" title="歌词">词</button>
+    <button id="likeBtn" class="icon like" title="收藏">♥</button>
+  </div>
+
+  <div class="center">
+    <div class="controls">
+      <button id="shuffleBtn" class="icon small" title="随机">⤨</button>
+      <button id="prevBtn" class="icon" title="上一首">⏮</button>
+      <button id="playBtn" class="icon play" title="播放/暂停">▶</button>
+      <button id="nextBtn" class="icon" title="下一首">⏭</button>
+      <button id="repeatBtn" class="icon small" title="循环">↻</button>
+    </div>
+    <div class="seek">
+      <span id="cur">0:00</span>
+      <div class="bar">
+        <input id="seek" type="range" min="0" max="1000" value="0" step="1">
+        <div class="buffer" id="buffer"></div>
+      </div>
+      <span id="dur">0:00</span>
+    </div>
+  </div>
+
+  <div class="right">
+    <span id="dlState" class="dl"></span>
+    <svg class="vol-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+      <path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/>
+    </svg>
+    <input id="vol" type="range" min="0" max="100" value="100">
+  </div>
+</footer>
+
+<section class="settings" id="settings" hidden>
+  <div class="settings-panel">
+    <div class="settings-head">
+      <div class="settings-title" id="settingsTitle">设置</div>
+      <button class="settings-close" id="settingsClose" title="完成">完成</button>
+    </div>
+    <div class="settings-body">
+      <div class="pref-group">
+        <div class="pref-label">语言偏好 <span class="pref-hint">影响推荐和场景，不选＝不限</span></div>
+        <div class="pref-chips" id="prefLang"></div>
+      </div>
+      <div class="pref-group">
+        <div class="pref-label">喜欢的类型 <span class="pref-hint">给发现加点倾向</span></div>
+        <div class="pref-chips" id="prefGenre"></div>
+      </div>
+      <div class="pref-group">
+        <div class="pref-label">不想听 <span class="pref-hint">这些会从搜索、发现、自动电台里过滤掉</span></div>
+        <div class="pref-chips" id="prefDislike"></div>
+      </div>
+      <div class="pref-group">
+        <label class="pref-toggle"><input type="checkbox" id="radio" checked> 自动电台（放完自动接相似歌）</label>
+      </div>
+      <div class="pref-group">
+        <div class="pref-label">更新 <span class="pref-hint" id="updateHint"></span></div>
+        <button id="checkUpdateBtn" class="update-btn">检查更新</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<audio id="audio" preload="auto"></audio>
+<script src="/static/app.js?v=12"></script>
+</body>
+</html>

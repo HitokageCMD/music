@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+
+# The music library and its SQLite index are yours, not the repo's.
+data/
+
+# built APK — deliver out-of-band, do not commit
+tunebox-*.apk

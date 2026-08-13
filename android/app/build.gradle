@@ -1,0 +1,83 @@
+plugins {
+    id 'com.android.application'
+    id 'com.chaquo.python'
+}
+
+android {
+    namespace 'net.tunebox'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'net.tunebox'
+        minSdk 26
+        targetSdk 34
+        versionCode 2
+        versionName '0.2'
+
+        // The user's phone is arm64. One ABI keeps the APK small and the build
+        // fast; add 'armeabi-v7a' / 'x86_64' here if it must run elsewhere.
+        ndk { abiFilters 'arm64-v8a' }
+
+        python {
+            // Chaquopy ships a prebuilt CPython — no NDK, no compilation.
+            version '3.12'
+            pip {
+                // Pure-Python, no compiled deps — the whole point of the refactor.
+                install 'yt-dlp'
+                install 'ytmusicapi'
+                install 'httpx'
+            }
+        }
+    }
+
+    // The Python backend and web assets live one level up in the same repo.
+    // Stage them in rather than duplicating: single source of truth.
+    sourceSets {
+        main {
+            python.srcDir 'build/pysrc'
+            assets.srcDir 'build/webassets'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // Kotlin 1.8 folded stdlib-jdk7/jdk8 into the main stdlib. androidx pulls
+    // 1.8.22 while something drags in the old 1.6.21 jdk7/jdk8 jars, and the two
+    // collide (duplicate classes). The BOM pins jdk7/jdk8 to 1.8.22, where they're
+    // empty shims, so nothing is duplicated.
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')
+    implementation 'androidx.activity:activity:1.9.3'
+    implementation 'androidx.core:core:1.13.1'
+}
+
+// Copy app/ (the Python package) and the boot script into the Chaquopy source dir.
+tasks.register('stagePython', Copy) {
+    into "${projectDir}/build/pysrc"
+    from("${rootDir}/../app") { into 'app' }
+    from("${projectDir}/pyboot")   // tunebox_boot.py
+}
+
+// Copy web/ into assets so the WebView's Python server can read real files.
+tasks.register('stageWeb', Copy) {
+    into "${projectDir}/build/webassets/web"
+    from "${rootDir}/../web"
+}
+
+// Gradle 8.14 fails the build if a task consumes another's output dir without an
+// explicit dependency. Chaquopy's merge*PythonSources reads build/pysrc and
+// merge*Assets reads build/webassets, so wire our staging tasks as their inputs.
+// matching{}.configureEach catches both debug and release variants as they're created.
+tasks.matching { it.name ==~ /merge.*PythonSources/ }.configureEach { dependsOn 'stagePython' }
+tasks.matching { it.name ==~ /merge.*Assets/ }.configureEach { dependsOn 'stageWeb' }
+tasks.named('preBuild') { dependsOn 'stagePython', 'stageWeb' }

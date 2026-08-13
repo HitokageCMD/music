@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0d0d10"/>
+  <!-- Content kept inside the 80% safe zone so Android's mask can't clip it. -->
+  <g transform="translate(256 256) scale(0.72) translate(-256 -256)"
+     fill="none" stroke="#f4b942" stroke-linecap="round">
+    <path d="M196 330V150l150-32v180" stroke-width="26" stroke-linejoin="round"/>
+    <circle cx="160" cy="336" r="38" stroke-width="26"/>
+    <circle cx="310" cy="304" r="38" stroke-width="26"/>
+  </g>
+</svg>
