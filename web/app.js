@@ -30,6 +30,8 @@ const state = {
   lyricIdx: -1,
   lyricHold: 0,
   sleep: { min: 60, until: 0 }, // 定时停止:min=拉条分钟数(30~300),until=截止时间戳(0=未启用)
+  selecting: false,     // 已下载视图的多选(管理)模式
+  selected: new Set(),  // 多选中的 track id
 };
 
 const esc = (s) =>
@@ -128,8 +130,9 @@ function rowHTML(t, i) {
   else if (t.because) snip = `<div class="row-snip because">因为你听了《${esc(t.because)}》</div>`;
   // "已下载" means this device can play it with the PC off — the thing that
   // actually matters on a phone. Server-side caching only buys a faster start.
+  const sizeMB = onPhone && t.size ? ` · ${(t.size / 1e6).toFixed(1)}MB` : '';
   const pill = onPhone
-    ? '<span class="pill on">已下载</span>'
+    ? `<span class="pill on">已下载${sizeMB}</span>`
     : (t.cached ? '<span class="pill">已缓存</span>' : '');
   // download · add-to-playlist · (remove-from-playlist | server-delete)
   const actions = [
@@ -138,7 +141,10 @@ function rowHTML(t, i) {
     inPlaylist ? `<button class="row-act" data-rmpl="${t.id}" title="移出此歌单">✕</button>`
       : (del ? `<button class="row-act" data-del="${t.id}" title="从服务器曲库删除">✕</button>` : ''),
   ].join('');
-  return `<div class="row${playing ? ' playing' : ''}" data-i="${i}">
+  const selecting = state.selecting && state.tab === 'library' && state.libFilter === 'phone';
+  const picked = selecting && state.selected.has(t.id);
+  return `<div class="row${playing ? ' playing' : ''}${picked ? ' selected' : ''}" data-i="${i}">
+    ${selecting ? `<span class="rowsel${picked ? ' on' : ''}"></span>` : ''}
     <img loading="lazy" data-art="${t.id}" alt="" onerror="this.style.visibility='hidden'">
     <div class="row-main">
       <div class="row-title">${esc(t.title)}${pill}</div>
@@ -421,7 +427,8 @@ function render() {
     list.innerHTML = back + `<div class="empty"><b>${a}</b>${b}</div>`;
     return;
   }
-  list.innerHTML = back + items.map(rowHTML).join('');
+  const dlbar = (state.tab === 'library' && state.libFilter === 'phone') ? dlBarHTML() : '';
+  list.innerHTML = back + dlbar + items.map(rowHTML).join('');
   paintArt(list);
 }
 
@@ -724,11 +731,46 @@ async function saveToPhone(t) {
 }
 
 async function removeFromPhone(id) {
+  const t = (state.lists.library || []).find((x) => x.id === id);
+  if (!confirm(`从手机删除《${t?.title || '这首歌'}》？`)) return;
   await Offline.remove(id);
   state.onPhone.delete(id);
+  state.selected.delete(id);
   if (state.tab === 'library' && state.libFilter === 'phone') {
     state.lists.library = await Offline.list();
   }
+  render();
+  refreshStats();
+}
+
+// 已下载视图的管理条:平时显示总占用,管理模式显示批量操作
+function dlBarHTML() {
+  const lib = state.lists.library || [];
+  if (!lib.length) return '';
+  const mb = (lib.reduce((s, t) => s + (t.size || 0), 0) / 1e6).toFixed(0);
+  if (state.selecting) {
+    const n = state.selected.size;
+    return `<div class="dlbar">
+      <button class="dlbtn" data-dlact="all">全选</button>
+      <span class="dlbar-info">已选 ${n}/${lib.length}</span>
+      <button class="dlbtn danger" data-dlact="del"${n ? '' : ' disabled'}>删除${n ? ` (${n})` : ''}</button>
+      <button class="dlbtn" data-dlact="done">完成</button>
+    </div>`;
+  }
+  return `<div class="dlbar">
+    <span class="dlbar-info">已下载 ${lib.length} 首 · ${mb} MB</span>
+    <button class="dlbtn" data-dlact="manage">管理</button>
+  </div>`;
+}
+
+async function dlBatchDelete() {
+  const ids = [...state.selected];
+  if (!ids.length) return;
+  if (!confirm(`确定删除选中的 ${ids.length} 首？删除后需要重新下载。`)) return;
+  for (const id of ids) { await Offline.remove(id); state.onPhone.delete(id); }
+  state.selected.clear();
+  state.selecting = false;
+  state.lists.library = await Offline.list();
   render();
   refreshStats();
 }
@@ -1163,6 +1205,7 @@ document.querySelectorAll('#subfilters button[data-filter]').forEach((b) =>
   b.addEventListener('click', () => {
     state.libFilter = b.dataset.filter;
     state.openPlaylist = null; // leaving/entering a filter drops any open playlist
+    state.selecting = false; state.selected.clear(); // 切换子过滤退出多选
     document.querySelectorAll('#subfilters button[data-filter]').forEach((x) =>
       x.classList.toggle('on', x === b));
     syncChrome();
@@ -1217,6 +1260,29 @@ $('#settings').addEventListener('click', (e) => {
 });
 
 $('#list').addEventListener('click', async (e) => {
+  // 已下载管理条按钮
+  const dlact = e.target.closest('[data-dlact]');
+  if (dlact) {
+    const a = dlact.dataset.dlact;
+    if (a === 'manage') { state.selecting = true; state.selected.clear(); render(); }
+    else if (a === 'done') { state.selecting = false; state.selected.clear(); render(); }
+    else if (a === 'all') {
+      const all = (state.lists.library || []).map((t) => t.id);
+      if (state.selected.size >= all.length) state.selected.clear();
+      else all.forEach((id) => state.selected.add(id));
+      render();
+    } else if (a === 'del') dlBatchDelete();
+    return;
+  }
+  // 多选模式下点行 = 勾选/取消,不播放
+  if (state.selecting && state.tab === 'library' && state.libFilter === 'phone') {
+    const r = e.target.closest('.row[data-i]');
+    if (r) {
+      const t = state.lists.library[+r.dataset.i];
+      if (t) { state.selected.has(t.id) ? state.selected.delete(t.id) : state.selected.add(t.id); render(); }
+      return;
+    }
+  }
   if (e.target.closest('#plback')) { closePlaylist(); return; }
   if (e.target.closest('#plrename')) {
     const cur = state.openPlaylist;
