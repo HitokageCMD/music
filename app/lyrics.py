@@ -260,20 +260,25 @@ def _same_song(a: str, b: str) -> bool:
 
 
 def _bridge(hit: dict) -> dict | None:
-    """Turn one QQ lyric hit into a playable YouTube track, or drop it."""
+    """Turn one QQ lyric hit into a playable YouTube track.
+
+    召回优先:歌词搜索是在回答「这句词是哪首歌」,宁可给个版本略有出入的,也别
+    让用户搜不到。有标题同名的候选,就按时长挑最接近的(消歧不同版本);一个都没
+    同名时,退而用最相关的第一个结果保底 —— 旧逻辑在这两处直接整条丢弃,扔掉了
+    大量真实命中(YouTube 标题常带【】/MV/官方等前后缀,时长也常与音频版差十几秒)。
+    """
     try:
         cands = ytdl.search(f"{hit['name']} {hit['singer']}", 5)
     except Exception:
         return None
-    cands = [c for c in cands if _same_song(hit["name"], c["title"])]
     if not cands:
         return None
-    if hit["duration"]:
-        cands.sort(key=lambda c: abs(c["duration"] - hit["duration"]))
-        drift = abs(cands[0]["duration"] - hit["duration"])
-        if drift > _MAX_DRIFT:
-            log.debug("dropped %r: nearest YouTube take is %ss adrift", hit["name"], drift)
-            return None
+    same = [c for c in cands if _same_song(hit["name"], c["title"])]
+    if same:
+        if hit["duration"]:
+            same.sort(key=lambda c: abs(c["duration"] - hit["duration"]))
+        return {**same[0], "snippet": hit["snippet"]}
+    # 没有标题严格同名的:用最相关的第一个保底,总比「搜不到」强
     return {**cands[0], "snippet": hit["snippet"]}
 
 
