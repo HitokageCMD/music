@@ -354,13 +354,17 @@ async function refreshStats() {
 
 /* ---------- data ---------- */
 
-// A YouTube/Bilibili link pasted into search → import it, don't search for it.
-function isImportUrl(q) {
-  return /^https?:\/\//i.test(q) && /(youtube\.com|youtu\.be|bilibili\.com|b23\.tv)/i.test(q);
+// Shares arrive as "【标题-哔哩哔哩】 https://b23.tv/xxx" — pull the URL out of
+// whatever text was pasted, then decide if it's an importable collection link.
+function importableUrl(q) {
+  const m = String(q).match(/https?:\/\/[^\s]+/i);
+  const u = m ? m[0].replace(/[)\]，。、]+$/, '') : '';
+  return u && /(youtube\.com|youtu\.be|bilibili\.com|b23\.tv)/i.test(u) ? u : null;
 }
 
 async function doSearch(q) {
-  if (isImportUrl(q)) return importUrl(q);
+  const url = importableUrl(q);
+  if (url) return importUrl(url);
   state.tab = 'search';
   state.scene = null; // a typed search clears any active scene
   state.loading = true; state.error = null;

@@ -233,6 +233,10 @@ class Handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return self._err(400, "bad json")
         url = (body.get("url") or "").strip()
+        # A pasted share is often "【标题-哔哩哔哩】 https://b23.tv/xxx" — extract the URL.
+        m = re.search(r"https?://[^\s]+", url)
+        if m:
+            url = m.group(0).rstrip(")]，。、")
         if not url:
             return self._err(400, "url required")
         try:

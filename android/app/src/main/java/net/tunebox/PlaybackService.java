@@ -66,6 +66,14 @@ public class PlaybackService extends Service {
         }
 
         session = new MediaSessionCompat(this, "tunebox");
+        // Without these, the system's transport controls (lock screen / shade)
+        // are drawn but their presses never reach the callback — exactly the
+        // "buttons do nothing" symptom.
+        session.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS
+                | MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
+        session.setSessionActivity(PendingIntent.getActivity(this, 0,
+                new Intent(this, MainActivity.class),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         session.setCallback(new MediaSessionCompat.Callback() {
             @Override public void onPlay() { if (controller != null) controller.play(); }
             @Override public void onPause() { if (controller != null) controller.pause(); }

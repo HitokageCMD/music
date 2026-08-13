@@ -28,11 +28,26 @@
             </intent-filter>
         </activity>
 
-        <!-- Keeps the process (and thus WebView audio) alive when backgrounded. -->
+        <!-- Foreground media service. The MEDIA_BUTTON filter lets media-button
+             events (lock screen, headset, notification actions) reach it. -->
         <service
             android:name=".PlaybackService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </service>
+
+        <!-- Routes media-button broadcasts to the service — required for the
+             notification's play/pause/next/prev actions to actually fire. -->
+        <receiver
+            android:name="androidx.media.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
 
         <!-- Shares the downloaded update APK with the system installer. -->
         <provider
