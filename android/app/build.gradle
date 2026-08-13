@@ -11,8 +11,8 @@ android {
         applicationId 'net.tunebox'
         minSdk 26
         targetSdk 34
-        versionCode 6
-        versionName '0.6'
+        versionCode 7
+        versionName '0.7'
 
         // The user's phone is arm64. One ABI keeps the APK small and the build
         // fast; add 'armeabi-v7a' / 'x86_64' here if it must run elsewhere.

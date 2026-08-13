@@ -29,6 +29,7 @@ const state = {
   lyrics: null,
   lyricIdx: -1,
   lyricHold: 0,
+  sleep: { setMin: 0, until: 0, endOfTrack: false }, // 定时停止:setMin=选中项,until=截止时间戳,endOfTrack=播完当前
 };
 
 const esc = (s) =>
@@ -279,6 +280,8 @@ function openSettings(firstRun = false) {
     btn.disabled = true;
   }
   renderPerms();
+  renderSleepChips();
+  updateSleepHint();
   $('#settings').hidden = false;
 }
 
@@ -317,6 +320,67 @@ $('#permRows').addEventListener('click', (e) => {
 // Coming back from a system settings page → refresh the granted/未开 badges.
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && !$('#settings').hidden) renderPerms();
+});
+
+/* ---------- 定时停止(睡眠定时器) ---------- */
+
+const SLEEP_OPTS = [
+  { label: '关', min: 0 },
+  { label: '15分', min: 15 },
+  { label: '30分', min: 30 },
+  { label: '60分', min: 60 },
+  { label: '90分', min: 90 },
+  { label: '播完这首', min: -1 },
+];
+
+function fmtLeft(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(s / 60), ss = s % 60;
+  if (m >= 60) return `${Math.floor(m / 60)}小时${m % 60}分`;
+  return `${m}分${String(ss).padStart(2, '0')}秒`;
+}
+
+function setSleep(min) {
+  if (min === 0) state.sleep = { setMin: 0, until: 0, endOfTrack: false };
+  else if (min === -1) state.sleep = { setMin: -1, until: 0, endOfTrack: true };
+  else state.sleep = { setMin: min, until: Date.now() + min * 60000, endOfTrack: false };
+  renderSleepChips();
+  updateSleepHint();
+}
+
+function clearSleep() {
+  state.sleep = { setMin: 0, until: 0, endOfTrack: false };
+  renderSleepChips();
+  updateSleepHint();
+}
+
+function renderSleepChips() {
+  const el = $('#sleepChips');
+  if (!el) return;
+  el.innerHTML = SLEEP_OPTS.map((o) =>
+    `<button data-sleep="${o.min}" class="${o.min === state.sleep.setMin ? 'on' : ''}">${o.label}</button>`
+  ).join('');
+}
+
+function updateSleepHint() {
+  const h = $('#sleepHint');
+  if (!h) return;
+  const s = state.sleep;
+  if (s.endOfTrack) h.textContent = '播完当前这首后暂停';
+  else if (s.until) h.textContent = `还剩 ${fmtLeft(s.until - Date.now())},到点暂停`;
+  else h.textContent = '到点自动暂停播放';
+}
+
+// 每秒检查:到点则暂停并复位;面板打开时顺便刷新倒计时
+setInterval(() => {
+  const s = state.sleep;
+  if (s.until && Date.now() >= s.until) { audio.pause(); clearSleep(); }
+  else if (s.until) updateSleepHint();
+}, 1000);
+
+$('#sleepChips').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sleep]');
+  if (b) setSleep(parseInt(b.dataset.sleep, 10));
 });
 
 function closeSettings() {
@@ -1250,7 +1314,11 @@ audio.addEventListener('pause', () => {
   $('#playBtn').textContent = '▶';
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
 });
-audio.addEventListener('ended', () => next(true));
+audio.addEventListener('ended', () => {
+  // 定时停止「播完这首」:到点就停在这里,不再续播
+  if (state.sleep.endOfTrack) { clearSleep(); return; }
+  next(true);
+});
 audio.addEventListener('loadedmetadata', () => { $('#dur').textContent = fmt(audio.duration); syncPosition(); });
 audio.addEventListener('error', () => {
   if (audio.src) $('#dlState').textContent = '播放失败';
