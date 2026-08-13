@@ -154,6 +154,12 @@ class Handler(BaseHTTPRequestHandler):
         if method == "DELETE" and (m := re.fullmatch(rf"/api/playlist/(\d+)/track/{_VID}", path)):
             db.remove_playlist_track(int(m[1]), m[2])
             return self._json({"ok": True})
+        if method == "POST" and (m := re.fullmatch(r"/api/playlist/(\d+)/rename", path)):
+            name = (self._jsonbody().get("name") or "").strip()
+            if not name:
+                return self._err(400, "name required")
+            db.rename_playlist(int(m[1]), name)
+            return self._json({"ok": True, "name": name})
         if method == "GET" and path == "/api/playlists":
             return self._json(db.list_playlists())
         if method == "GET" and (m := re.fullmatch(r"/api/playlist/(\d+)", path)):

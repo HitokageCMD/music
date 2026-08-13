@@ -207,6 +207,10 @@ def remove_playlist_track(pid: int, track_id: str) -> None:
     _write("DELETE FROM playlist_tracks WHERE playlist_id=? AND track_id=?", (pid, track_id))
 
 
+def rename_playlist(pid: int, name: str) -> None:
+    _write("UPDATE playlists SET name=? WHERE id=?", (name, pid))
+
+
 def list_playlists() -> list[dict]:
     rows = conn().execute(
         """

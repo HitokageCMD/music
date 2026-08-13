@@ -301,9 +301,10 @@ function render() {
     list.innerHTML = `<div class="empty"><b class="err">出错了</b>${esc(state.error)}</div>`;
     return;
   }
-  // A back chip sits above the tracks when a playlist is open.
+  // A back chip + rename sit above the tracks when a playlist is open.
   const back = inPlaylists && state.openPlaylist
-    ? `<button class="plback" id="plback">‹ ${esc(state.openPlaylist.name)}</button>` : '';
+    ? `<div class="plnav"><button class="plback" id="plback">‹ ${esc(state.openPlaylist.name)}</button>
+         <button class="plrename" id="plrename" title="重命名">改名</button></div>` : '';
   const items = state.lists[state.tab];
   if (!items.length) {
     let key = state.tab;
@@ -545,7 +546,7 @@ function renderPlaylists() {
   list.innerHTML = state.playlists.map((p) => `
     <div class="plcard" data-open="${p.id}">
       <div class="plcard-name">${esc(p.name)}</div>
-      <span class="plcard-meta">${p.count} 首 · <span class="plcard-src">${p.source === 'bili' ? 'B站' : 'YT'}</span></span>
+      <span class="plcard-meta">${p.count} 首 · <span class="plcard-src">${p.source === 'bili' ? 'B站' : p.source === 'user' ? '自建' : 'YT'}</span></span>
       <button class="row-act" data-delpl="${p.id}" data-name="${esc(p.name)}" title="删除清单">✕</button>
     </div>`).join('');
 }
@@ -558,10 +559,11 @@ async function openPicker(track) {
   _pickTrack = track;
   let pls = [];
   try { pls = await api('/api/playlists'); } catch {}
-  const mine = pls.filter((p) => p.source === 'user' || !p.source);
-  $('#pickerList').innerHTML = mine.length
-    ? mine.map((p) => `<button data-pl="${p.id}">${esc(p.name)}<span class="cnt">${p.count} 首</span></button>`).join('')
-    : '<div class="empty-hint">还没有自建歌单，下面新建一个</div>';
+  // All playlists — you can drop a song into an imported collection too.
+  const tag = (s) => (s === 'bili' ? ' · B站' : s === 'yt' ? ' · YT' : '');
+  $('#pickerList').innerHTML = pls.length
+    ? pls.map((p) => `<button data-pl="${p.id}">${esc(p.name)}<span class="cnt">${p.count} 首${tag(p.source)}</span></button>`).join('')
+    : '<div class="empty-hint">还没有歌单，下面新建一个</div>';
   $('#pickerName').value = '';
   $('#picker').hidden = false;
 }
@@ -1118,6 +1120,16 @@ $('#discover').addEventListener('click', (e) => {
 
 $('#list').addEventListener('click', async (e) => {
   if (e.target.closest('#plback')) { closePlaylist(); return; }
+  if (e.target.closest('#plrename')) {
+    const cur = state.openPlaylist;
+    const name = prompt('歌单改名', cur?.name || '');
+    if (name && name.trim() && cur) {
+      await api(`/api/playlist/${cur.id}/rename`, { method: 'POST', body: JSON.stringify({ name: name.trim() }) });
+      state.openPlaylist.name = name.trim();
+      loadPlaylists();
+    }
+    return;
+  }
   const delpl = e.target.closest('[data-delpl]');
   if (delpl) { e.stopPropagation(); deletePlaylist(+delpl.dataset.delpl, delpl.dataset.name); return; }
   const openCard = e.target.closest('[data-open]');
