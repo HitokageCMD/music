@@ -36,10 +36,12 @@ public class PlaybackService extends Service {
         void next();
         void prev();
         void seek(long ms);
+        void like();  // 收藏/取消收藏当前歌(锁屏/通知上的喜欢按钮)
     }
 
     private static final String CHANNEL = "tunebox_media";
     private static final int NOTIF_ID = 1;
+    static final String ACTION_LIKE = "net.tunebox.action.LIKE"; // 通知喜欢按钮触发
 
     static PlaybackService instance;
     static Controller controller;
@@ -47,6 +49,7 @@ public class PlaybackService extends Service {
     private MediaSessionCompat session;
     private String title = "tunebox", artist = "";
     private boolean playing = false;
+    private boolean liked = false;
     private long positionMs = 0, durationMs = 0;
     private Bitmap art;
     private String artUrlLoaded = "";
@@ -87,18 +90,23 @@ public class PlaybackService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // Route media-button intents (from the notification actions) to the callback.
-        MediaButtonReceiver.handleIntent(session, intent);
+        if (intent != null && ACTION_LIKE.equals(intent.getAction())) {
+            if (controller != null) controller.like();
+        } else {
+            // Route media-button intents (from the notification actions) to the callback.
+            MediaButtonReceiver.handleIntent(session, intent);
+        }
         startForeground(NOTIF_ID, buildNotification());
         return START_STICKY;
     }
 
     /** Called from the JS bridge whenever playback state changes. */
     public void update(String title, String artist, String artUrl,
-                       boolean playing, long positionMs, long durationMs) {
+                       boolean playing, long positionMs, long durationMs, boolean liked) {
         this.title = title == null || title.isEmpty() ? "tunebox" : title;
         this.artist = artist == null ? "" : artist;
         this.playing = playing;
+        this.liked = liked;
         this.positionMs = positionMs;
         this.durationMs = durationMs;
 
@@ -163,6 +171,12 @@ public class PlaybackService extends Service {
                         android.R.drawable.ic_media_next, "下一首",
                         MediaButtonReceiver.buildMediaButtonPendingIntent(
                                 this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT)))
+                .addAction(new NotificationCompat.Action(
+                        liked ? android.R.drawable.btn_star_big_on : android.R.drawable.btn_star_big_off,
+                        liked ? "已收藏" : "喜欢",
+                        PendingIntent.getService(this, 1,
+                                new Intent(this, PlaybackService.class).setAction(ACTION_LIKE),
+                                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)))
                 .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
                         .setMediaSession(session.getSessionToken())
                         .setShowActionsInCompactView(0, 1, 2));

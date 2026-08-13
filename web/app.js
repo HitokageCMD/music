@@ -1116,6 +1116,7 @@ function initMediaSession() {
 window.__tuneboxNext = () => next();
 window.__tuneboxPrev = () => prev();
 window.__tuneboxSeek = (ms) => { if (isFinite(audio.duration)) audio.currentTime = ms / 1000; };
+window.__tuneboxLike = () => { const b = document.getElementById('likeBtn'); if (b) b.click(); };
 
 let _lastPush = 0;
 function pushMedia(force) {
@@ -1133,6 +1134,7 @@ function pushMedia(force) {
       playing: !audio.paused,
       position: Math.round((audio.currentTime || 0) * 1000),
       duration: Math.round((audio.duration || 0) * 1000),
+      liked: !!(t && t.liked),
     }));
   } catch {}
 }
@@ -1358,6 +1360,7 @@ $('#likeBtn').addEventListener('click', async () => {
   state.current.liked = liked;
   if (liked) state.current.disliked = false; // 喜欢与不喜欢互斥
   renderNP();
+  pushMedia(true); // 同步锁屏/通知上的喜欢按钮状态
   await api(`/api/like/${state.current.id}?liked=${liked}`, { method: 'POST' });
   if (state.tab === 'library' && state.libFilter === 'liked') loadLibrary();
 });

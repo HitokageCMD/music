@@ -64,6 +64,7 @@ public class MainActivity extends ComponentActivity {
             public void next()  { runJs("window.__tuneboxNext && window.__tuneboxNext();"); }
             public void prev()  { runJs("window.__tuneboxPrev && window.__tuneboxPrev();"); }
             public void seek(long ms) { runJs("window.__tuneboxSeek && window.__tuneboxSeek(" + ms + ");"); }
+            public void like() { runJs("window.__tuneboxLike && window.__tuneboxLike();"); }
         });
 
         // Keeps the process alive when backgrounded, and now carries the media
@@ -166,7 +167,8 @@ public class MainActivity extends ComponentActivity {
                 if (s != null) {
                     s.update(o.optString("title"), o.optString("artist"), o.optString("art"),
                             o.optBoolean("playing"),
-                            (long) o.optDouble("position", 0), (long) o.optDouble("duration", 0));
+                            (long) o.optDouble("position", 0), (long) o.optDouble("duration", 0),
+                            o.optBoolean("liked"));
                 }
             } catch (Exception ignored) {}
         }
