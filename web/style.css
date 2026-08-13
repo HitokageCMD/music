@@ -172,6 +172,16 @@ header {
 }
 .perm-row button.done { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
 
+.sleep-row { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+#sleepRange { flex: 1; height: 4px; }
+#sleepRange::-webkit-slider-thumb { opacity: 1; width: 16px; height: 16px; }
+#sleepRange::-moz-range-thumb { width: 16px; height: 16px; }
+.sleep-val { font-size: 13px; color: var(--text); min-width: 62px; text-align: right; font-variant-numeric: tabular-nums; }
+.sleep-off {
+  margin-top: 10px; font-size: 12px; padding: 5px 12px; border-radius: 999px;
+  background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); cursor: pointer;
+}
+
 /* sub-filters: a quieter, secondary row under the main tabs */
 .subfilters {
   position: sticky; top: calc(var(--header-h) + var(--tabs-h)); z-index: 18;

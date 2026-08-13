@@ -13,8 +13,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="tunebox">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="/static/style.css?v=19">
-<script src="/static/idb.js?v=19"></script>
+<link rel="stylesheet" href="/static/style.css?v=20">
+<script src="/static/idb.js?v=20"></script>
 </head>
 <body>
 
@@ -131,8 +131,12 @@
         <label class="pref-toggle"><input type="checkbox" id="radio" checked> 自动电台（放完自动接相似歌）</label>
       </div>
       <div class="pref-group">
-        <div class="pref-label">定时停止 <span class="pref-hint" id="sleepHint">到点自动暂停播放</span></div>
-        <div class="pref-chips" id="sleepChips"></div>
+        <div class="pref-label">定时停止 <span class="pref-hint" id="sleepHint">拖动设定,到点自动暂停</span></div>
+        <div class="sleep-row">
+          <input id="sleepRange" type="range" min="30" max="300" step="15" value="60">
+          <span id="sleepVal" class="sleep-val">1小时</span>
+        </div>
+        <button id="sleepOff" class="sleep-off" hidden>关闭定时</button>
       </div>
       <div class="pref-group" id="permGroup" hidden>
         <div class="pref-label">后台权限 <span class="pref-hint">锁屏控制、后台不断播需要（荣耀/华为）</span></div>
@@ -161,6 +165,6 @@
 </section>
 
 <audio id="audio" preload="auto"></audio>
-<script src="/static/app.js?v=19"></script>
+<script src="/static/app.js?v=20"></script>
 </body>
 </html>

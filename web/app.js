@@ -29,7 +29,7 @@ const state = {
   lyrics: null,
   lyricIdx: -1,
   lyricHold: 0,
-  sleep: { setMin: 0, until: 0, endOfTrack: false }, // 定时停止:setMin=选中项,until=截止时间戳,endOfTrack=播完当前
+  sleep: { min: 60, until: 0 }, // 定时停止:min=拉条分钟数(30~300),until=截止时间戳(0=未启用)
 };
 
 const esc = (s) =>
@@ -280,8 +280,7 @@ function openSettings(firstRun = false) {
     btn.disabled = true;
   }
   renderPerms();
-  renderSleepChips();
-  updateSleepHint();
+  renderSleep();
   $('#settings').hidden = false;
 }
 
@@ -324,14 +323,13 @@ document.addEventListener('visibilitychange', () => {
 
 /* ---------- 定时停止(睡眠定时器) ---------- */
 
-const SLEEP_OPTS = [
-  { label: '关', min: 0 },
-  { label: '15分', min: 15 },
-  { label: '30分', min: 30 },
-  { label: '60分', min: 60 },
-  { label: '90分', min: 90 },
-  { label: '播完这首', min: -1 },
-];
+// 分钟数 → 友好时长,如 "30分" / "1小时" / "2小时30分"
+function fmtDur(min) {
+  const h = Math.floor(min / 60), m = min % 60;
+  if (h && m) return `${h}小时${m}分`;
+  if (h) return `${h}小时`;
+  return `${m}分`;
+}
 
 function fmtLeft(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -340,48 +338,48 @@ function fmtLeft(ms) {
   return `${m}分${String(ss).padStart(2, '0')}秒`;
 }
 
+// 松手即设定:从现在起 min 分钟后暂停
 function setSleep(min) {
-  if (min === 0) state.sleep = { setMin: 0, until: 0, endOfTrack: false };
-  else if (min === -1) state.sleep = { setMin: -1, until: 0, endOfTrack: true };
-  else state.sleep = { setMin: min, until: Date.now() + min * 60000, endOfTrack: false };
-  renderSleepChips();
-  updateSleepHint();
+  state.sleep = { min, until: Date.now() + min * 60000 };
+  renderSleep();
 }
 
+// 关闭定时(保留拉条位置,方便下次)
 function clearSleep() {
-  state.sleep = { setMin: 0, until: 0, endOfTrack: false };
-  renderSleepChips();
-  updateSleepHint();
+  state.sleep = { min: state.sleep.min || 60, until: 0 };
+  renderSleep();
 }
 
-function renderSleepChips() {
-  const el = $('#sleepChips');
-  if (!el) return;
-  el.innerHTML = SLEEP_OPTS.map((o) =>
-    `<button data-sleep="${o.min}" class="${o.min === state.sleep.setMin ? 'on' : ''}">${o.label}</button>`
-  ).join('');
-}
-
-function updateSleepHint() {
-  const h = $('#sleepHint');
-  if (!h) return;
+// 按当前 state 重绘拉条 / 数值 / 提示 / 关闭按钮
+function renderSleep() {
+  const r = $('#sleepRange');
+  if (!r) return;
   const s = state.sleep;
-  if (s.endOfTrack) h.textContent = '播完当前这首后暂停';
-  else if (s.until) h.textContent = `还剩 ${fmtLeft(s.until - Date.now())},到点暂停`;
-  else h.textContent = '到点自动暂停播放';
+  const cur = s.min || 60;
+  r.value = cur;
+  $('#sleepVal').textContent = fmtDur(cur);
+  if (s.until) {
+    $('#sleepHint').textContent = `还剩 ${fmtLeft(s.until - Date.now())},到点暂停`;
+    $('#sleepOff').hidden = false;
+  } else {
+    $('#sleepHint').textContent = '拖动设定,到点自动暂停';
+    $('#sleepOff').hidden = true;
+  }
 }
 
-// 每秒检查:到点则暂停并复位;面板打开时顺便刷新倒计时
+// 拖动时只预览数值,松手(change)才真正设定
+$('#sleepRange').addEventListener('input', (e) => {
+  $('#sleepVal').textContent = fmtDur(parseInt(e.target.value, 10));
+});
+$('#sleepRange').addEventListener('change', (e) => setSleep(parseInt(e.target.value, 10)));
+$('#sleepOff').addEventListener('click', clearSleep);
+
+// 每秒检查:到点则暂停并复位;启用中刷新倒计时
 setInterval(() => {
   const s = state.sleep;
   if (s.until && Date.now() >= s.until) { audio.pause(); clearSleep(); }
-  else if (s.until) updateSleepHint();
+  else if (s.until) renderSleep();
 }, 1000);
-
-$('#sleepChips').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-sleep]');
-  if (b) setSleep(parseInt(b.dataset.sleep, 10));
-});
 
 function closeSettings() {
   $('#settings').hidden = true;
@@ -1314,11 +1312,7 @@ audio.addEventListener('pause', () => {
   $('#playBtn').textContent = '▶';
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
 });
-audio.addEventListener('ended', () => {
-  // 定时停止「播完这首」:到点就停在这里,不再续播
-  if (state.sleep.endOfTrack) { clearSleep(); return; }
-  next(true);
-});
+audio.addEventListener('ended', () => next(true));
 audio.addEventListener('loadedmetadata', () => { $('#dur').textContent = fmt(audio.duration); syncPosition(); });
 audio.addEventListener('error', () => {
   if (audio.src) $('#dlState').textContent = '播放失败';
