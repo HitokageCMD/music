@@ -56,7 +56,13 @@ uv run python smoke.py
 
 **场景快搜:** 搜索栏下一排标签(派对/开车/打扫/洗澡/emo/专注…),点一下出对应氛围的一列歌,自动电台接着往下放。关键——**场景是心情不是直译**:「洗澡」直接搜是儿童洗澡歌,所以映射成 feel-good 跟唱金曲;「打扫」映射成 upbeat pop 而不是电梯背景乐。映射表在 `web/app.js` 的 `SCENES`,一行一个,想改想加随手改。
 
-**下拉/锁屏控制:** MediaSession(`web/app.js`)——播放/暂停/上一首/下一首/进度全套,PWA 里直接出现在通知栏和锁屏。APK 里靠 WebView 自带的 MediaSession 承接(现代 WebView 支持,未在真机验证)。
+**下拉/锁屏控制:**
+- **PWA**:MediaSession(`web/app.js`)——播放/暂停/上一首/下一首/进度,直接出现在通知栏和锁屏。
+- **APK**:WebView 的 MediaSession 不出控制,所以用**原生 MediaSession + MediaStyle 通知**(`PlaybackService.java`)。JS 通过 `window.tunebox.updateMedia` 把状态推给安卓,安卓的按钮回调再 `evaluateJavascript` 驱动 WebView 的 `<audio>`(`window.__tuneboxNext/Prev/Seek`)。前台服务保活 + 媒体通知一体。
+
+**自建歌单:** 每首歌右边「＋」→ 选/新建歌单加进去(`/api/playlist` 增删、`/api/playlist/{id}/add`、`.../track/{id}` 移除)。导入的合集和自建歌单都在「音乐库 › 歌单」。删除已下载:「音乐库 › 已下载」里点每首的 ✓。
+
+**移动端:** 场景/发现的标签在手机上**换行**而不是横向滚动(否则一直「要左右拉」);循环键(单曲/列表)在手机上也显示。
 
 **推荐是照你的口味长出来的，不靠账号。** 种子取自你真实听过/收藏的歌(`db.seed_tracks`：liked → 播放次数 → 最近)，给每首拉一个 YouTube Music 电台，然后按**共现**排序——一首歌同时出现在你好几个种子的电台里，就是更强的推荐(`app/recommend.py`)。已经在库里/已收藏/当种子的都排除掉，只推新的。冷启动(没有任何历史)就空着，提示你先听几首。
 

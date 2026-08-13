@@ -13,8 +13,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="tunebox">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="/static/style.css?v=12">
-<script src="/static/idb.js?v=12"></script>
+<link rel="stylesheet" href="/static/style.css?v=14">
+<script src="/static/idb.js?v=14"></script>
 </head>
 <body>
 
@@ -138,7 +138,21 @@
   </div>
 </section>
 
+<section class="picker" id="picker" hidden>
+  <div class="picker-panel">
+    <div class="picker-head">
+      <span>加入歌单</span>
+      <button class="picker-close" id="pickerClose">完成</button>
+    </div>
+    <div class="picker-list" id="pickerList"></div>
+    <form class="picker-new" id="pickerNew">
+      <input id="pickerName" placeholder="＋ 新建歌单…" autocomplete="off">
+      <button type="submit">建</button>
+    </form>
+  </div>
+</section>
+
 <audio id="audio" preload="auto"></audio>
-<script src="/static/app.js?v=12"></script>
+<script src="/static/app.js?v=14"></script>
 </body>
 </html>

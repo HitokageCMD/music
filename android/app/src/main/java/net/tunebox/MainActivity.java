@@ -22,6 +22,8 @@ import com.chaquo.python.PyObject;
 import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
 
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -49,11 +51,26 @@ public class MainActivity extends ComponentActivity {
         setContentView(web);
         configureWebView(web);
 
-        // Keeps the process alive when backgrounded, so WebView audio keeps going.
+        // Media session button presses (lock screen / notification) run JS on the
+        // WebView, which is where the actual <audio> player lives.
+        PlaybackService.setController(new PlaybackService.Controller() {
+            public void play()  { runJs("var a=document.getElementById('audio'); if(a) a.play();"); }
+            public void pause() { runJs("var a=document.getElementById('audio'); if(a) a.pause();"); }
+            public void next()  { runJs("window.__tuneboxNext && window.__tuneboxNext();"); }
+            public void prev()  { runJs("window.__tuneboxPrev && window.__tuneboxPrev();"); }
+            public void seek(long ms) { runJs("window.__tuneboxSeek && window.__tuneboxSeek(" + ms + ");"); }
+        });
+
+        // Keeps the process alive when backgrounded, and now carries the media
+        // notification with play/pause/next/prev.
         Intent svc = new Intent(this, PlaybackService.class);
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc); else startService(svc);
 
         startBackend();
+    }
+
+    private void runJs(String js) {
+        runOnUiThread(() -> { if (web != null) web.evaluateJavascript(js, null); });
 
         // Once a day, quietly check GitHub Releases for a newer APK (keeps yt-dlp fresh).
         Updater.autoCheck(this);
@@ -68,6 +85,19 @@ public class MainActivity extends ComponentActivity {
         @JavascriptInterface
         public boolean isApp() {
             return true;
+        }
+        /** JS pushes playback state here; drives the media session + notification. */
+        @JavascriptInterface
+        public void updateMedia(String json) {
+            try {
+                JSONObject o = new JSONObject(json);
+                PlaybackService s = PlaybackService.instance;
+                if (s != null) {
+                    s.update(o.optString("title"), o.optString("artist"), o.optString("art"),
+                            o.optBoolean("playing"),
+                            (long) o.optDouble("position", 0), (long) o.optDouble("duration", 0));
+                }
+            } catch (Exception ignored) {}
         }
     }
 

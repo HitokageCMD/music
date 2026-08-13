@@ -123,8 +123,9 @@ function dlBtn(t) {
 function rowHTML(t, i) {
   const playing = state.current?.id === t.id;
   const onPhone = state.onPhone.has(t.id);
-  // Server-side delete only makes sense for the server-backed filters.
-  const del = state.tab === 'library' && state.libFilter !== 'phone';
+  const inPlaylist = state.tab === 'library' && state.libFilter === 'playlists' && state.openPlaylist;
+  // Server-side delete only makes sense for the server-backed library filters.
+  const del = state.tab === 'library' && state.libFilter === 'all' || (state.tab === 'library' && state.libFilter === 'liked');
   let snip = '';
   if (t.snippet) snip = `<div class="row-snip">${hilite(t.snippet, $('#q').value.trim())}</div>`;
   else if (t.because) snip = `<div class="row-snip because">因为你听了《${esc(t.because)}》</div>`;
@@ -133,6 +134,13 @@ function rowHTML(t, i) {
   const pill = onPhone
     ? '<span class="pill on">已下载</span>'
     : (t.cached ? '<span class="pill">已缓存</span>' : '');
+  // download · add-to-playlist · (remove-from-playlist | server-delete)
+  const actions = [
+    dlBtn(t),
+    state.online ? `<button class="row-dl add" data-add="${t.id}" title="加入歌单">＋</button>` : '',
+    inPlaylist ? `<button class="row-act" data-rmpl="${t.id}" title="移出此歌单">✕</button>`
+      : (del ? `<button class="row-act" data-del="${t.id}" title="从服务器曲库删除">✕</button>` : ''),
+  ].join('');
   return `<div class="row${playing ? ' playing' : ''}" data-i="${i}">
     <img loading="lazy" data-art="${t.id}" alt="" onerror="this.style.visibility='hidden'">
     <div class="row-main">
@@ -141,8 +149,7 @@ function rowHTML(t, i) {
     </div>
     <div class="row-album">${esc(t.album)}</div>
     <div class="row-dur">${fmt(t.duration)}</div>
-    ${dlBtn(t)}
-    ${del ? `<button class="row-act" data-del="${t.id}" title="从服务器曲库删除">✕</button>` : '<span></span>'}
+    <div class="row-actions">${actions}</div>
     ${snip}
   </div>`;
 }
@@ -539,6 +546,58 @@ function renderPlaylists() {
     </div>`).join('');
 }
 
+/* ---------- add a song to a playlist ---------- */
+
+let _pickTrack = null;
+
+async function openPicker(track) {
+  _pickTrack = track;
+  let pls = [];
+  try { pls = await api('/api/playlists'); } catch {}
+  const mine = pls.filter((p) => p.source === 'user' || !p.source);
+  $('#pickerList').innerHTML = mine.length
+    ? mine.map((p) => `<button data-pl="${p.id}">${esc(p.name)}<span class="cnt">${p.count} 首</span></button>`).join('')
+    : '<div class="empty-hint">还没有自建歌单，下面新建一个</div>';
+  $('#pickerName').value = '';
+  $('#picker').hidden = false;
+}
+
+function closePicker() { $('#picker').hidden = true; _pickTrack = null; }
+
+async function addToPlaylist(pid) {
+  if (!_pickTrack) return;
+  try {
+    await api(`/api/playlist/${pid}/add`, { method: 'POST', body: JSON.stringify({ track: _pickTrack }) });
+  } catch (e) { alert('加入失败：' + e.message); return; }
+  closePicker();
+}
+
+async function createAndAdd(name) {
+  try {
+    const p = await api('/api/playlist', { method: 'POST', body: JSON.stringify({ name }) });
+    await api(`/api/playlist/${p.id}/add`, { method: 'POST', body: JSON.stringify({ track: _pickTrack }) });
+  } catch (e) { alert('新建失败：' + e.message); return; }
+  closePicker();
+}
+
+async function removeFromPlaylist(trackId) {
+  if (!state.openPlaylist) return;
+  await api(`/api/playlist/${state.openPlaylist.id}/track/${trackId}`, { method: 'DELETE' });
+  loadPlaylists();
+}
+
+$('#pickerClose').addEventListener('click', closePicker);
+$('#picker').addEventListener('click', (e) => {
+  if (e.target === $('#picker')) { closePicker(); return; }
+  const b = e.target.closest('[data-pl]');
+  if (b) addToPlaylist(+b.dataset.pl);
+});
+$('#pickerNew').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = $('#pickerName').value.trim();
+  if (name) createAndAdd(name);
+});
+
 /* ---------- on-device downloads ---------- */
 
 async function saveToPhone(t) {
@@ -903,6 +962,40 @@ function initMediaSession() {
   }
 }
 
+/* ---------- native (APK) media session bridge ----------
+   The WebView's own MediaSession doesn't surface lock-screen/notification
+   controls, so in the APK we push state to Android (window.tunebox.updateMedia)
+   and Android runs these globals when its buttons are pressed. No-ops in the PWA. */
+
+window.__tuneboxNext = () => next();
+window.__tuneboxPrev = () => prev();
+window.__tuneboxSeek = (ms) => { if (isFinite(audio.duration)) audio.currentTime = ms / 1000; };
+
+let _lastPush = 0;
+function pushMedia(force) {
+  const b = window.tunebox;
+  if (!b || !b.updateMedia) return; // PWA: nothing native to drive
+  const now = Date.now();
+  if (!force && now - _lastPush < 1500) return; // throttle position updates
+  _lastPush = now;
+  const t = state.current;
+  try {
+    b.updateMedia(JSON.stringify({
+      title: t ? t.title : '',
+      artist: t ? (t.artist || '') : '',
+      art: t ? `${location.origin}/api/art/${t.id}` : '',
+      playing: !audio.paused,
+      position: Math.round((audio.currentTime || 0) * 1000),
+      duration: Math.round((audio.duration || 0) * 1000),
+    }));
+  } catch {}
+}
+
+audio.addEventListener('play', () => pushMedia(true));
+audio.addEventListener('pause', () => pushMedia(true));
+audio.addEventListener('loadedmetadata', () => pushMedia(true));
+audio.addEventListener('timeupdate', () => pushMedia(false));
+
 /* ---------- cache progress ---------- */
 
 let pollTimer = null;
@@ -1035,6 +1128,15 @@ $('#list').addEventListener('click', async (e) => {
   }
   const unsave = e.target.closest('[data-unsave]');
   if (unsave) { e.stopPropagation(); removeFromPhone(unsave.dataset.unsave); return; }
+
+  const add = e.target.closest('[data-add]');
+  if (add) {
+    e.stopPropagation();
+    openPicker(state.lists[state.tab][+add.closest('.row').dataset.i]);
+    return;
+  }
+  const rmpl = e.target.closest('[data-rmpl]');
+  if (rmpl) { e.stopPropagation(); removeFromPlaylist(rmpl.dataset.rmpl); return; }
 
   const del = e.target.closest('[data-del]');
   if (del) {

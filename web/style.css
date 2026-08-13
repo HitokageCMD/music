@@ -170,6 +170,40 @@ header {
 .subfilters button[data-filter]:hover { color: var(--text); }
 .subfilters button[data-filter].on { color: var(--text); background: var(--accent-dim); }
 
+/* ---------- add-to-playlist picker ---------- */
+
+.picker {
+  position: fixed; inset: 0; z-index: 45;
+  background: rgba(0, 0, 0, .5);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.picker-panel {
+  width: min(460px, 100%); max-height: 70vh; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom);
+  animation: rise .2s ease-out;
+}
+.picker-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--line); font-weight: 600;
+}
+.picker-close { color: var(--accent); font-weight: 600; padding: 4px 8px; }
+.picker-list { overflow-y: auto; padding: 6px 8px; }
+.picker-list button {
+  display: flex; width: 100%; align-items: center; gap: 10px;
+  padding: 12px 14px; border-radius: 8px; color: var(--text); font-size: 14px; text-align: left;
+}
+.picker-list button:hover { background: var(--surface-2); }
+.picker-list button .cnt { margin-left: auto; color: var(--muted); font-size: 12px; }
+.picker-list .empty-hint { color: var(--muted); padding: 14px; font-size: 13px; }
+.picker-new { display: flex; gap: 8px; padding: 10px 14px 14px; border-top: 1px solid var(--line); }
+.picker-new input {
+  flex: 1; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 9px 12px; outline: none;
+}
+.picker-new input:focus { border-color: var(--accent); }
+.picker-new button { padding: 9px 16px; border-radius: 8px; background: var(--accent); color: var(--bg); font-weight: 600; }
+
 /* ---------- import bar + playlists ---------- */
 
 .importbar {
@@ -237,12 +271,14 @@ main { padding: 10px 10px 28px; max-width: 1100px; margin: 0 auto; }
 
 .row {
   display: grid;
-  grid-template-columns: 40px 1fr minmax(0, 200px) 54px 30px 30px;
+  grid-template-columns: 40px 1fr minmax(0, 200px) 54px auto;
   align-items: center; gap: 13px;
   padding: 7px 10px;
   border-radius: 8px;
   cursor: pointer;
 }
+.row-actions { display: flex; align-items: center; gap: 2px; justify-self: end; }
+.row-dl.add { font-size: 17px; }
 .row:hover { background: var(--surface); }
 .row.playing { background: var(--surface-2); }
 .row.playing .row-title { color: var(--accent); }
@@ -472,10 +508,9 @@ input[type=range]::-moz-range-thumb {
   .stats { display: none; }
   .mode button { padding: 4px 8px; font-size: 11px; }
 
-  /* Download stays; the server-side delete is the one that goes. */
-  .row { grid-template-columns: 40px 1fr 46px 30px; gap: 11px; }
+  .row { grid-template-columns: 40px 1fr 46px auto; gap: 10px; }
   .row-album { display: none; }
-  .row-act { display: none; }
+  .row-act { opacity: 1; }       /* on a phone there's no hover — show it */
   .row-dl { opacity: 1; font-size: 16px; padding: 8px 4px; }
   .row-snip { grid-column: 2 / -1; }
   .save-all { padding: 5px 9px; font-size: 11px; margin-left: 2px; }
@@ -493,13 +528,18 @@ input[type=range]::-moz-range-thumb {
   .stage-lyrics { padding: 22vh 0; }
   .stage-lyrics p { font-size: 17px; }
 
-  .player { grid-template-columns: 1fr auto; gap: 10px; padding: 0 12px env(safe-area-inset-bottom); }
+  /* Chips WRAP on a phone instead of scrolling sideways — no more "要左右拉". */
+  .scenes { flex-wrap: wrap; overflow-x: visible; padding: 10px 12px 2px; }
+
+  .player { grid-template-columns: 1fr auto; gap: 8px; padding: 0 10px env(safe-area-inset-bottom); }
   .right { display: none; }
   .np img { width: 42px; height: 42px; }
-  .center { flex-direction: row; gap: 2px; }
+  .np { gap: 9px; }
+  .center { flex-direction: row; gap: 0; }
   .seek { display: none; }
-  #shuffleBtn, #repeatBtn { display: none; }
+  #shuffleBtn { display: none; }   /* keep repeat: 单曲/列表循环 */
   #likeBtn { display: none; }
+  .controls .icon { padding: 8px 5px; }
 
   /* Thin progress line across the top of the player instead of a full seek bar. */
   .player::before {

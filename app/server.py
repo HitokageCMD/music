@@ -90,6 +90,12 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         return self.rfile.read(n) if n else b""
 
+    def _jsonbody(self):
+        try:
+            return json.loads(self._body() or b"{}")
+        except json.JSONDecodeError:
+            return {}
+
     # --- dispatch -----------------------------------------------------------
 
     def do_GET(self):
@@ -132,6 +138,22 @@ class Handler(BaseHTTPRequestHandler):
             return self._recommend(q)
         if method == "POST" and path == "/api/import":
             return self._import()
+        if method == "POST" and path == "/api/playlist":  # create an empty user playlist
+            body = self._jsonbody()
+            name = (body.get("name") or "").strip()
+            if not name:
+                return self._err(400, "name required")
+            return self._json({"id": db.create_playlist(name, "user", ""), "name": name})
+        if method == "POST" and (m := re.fullmatch(r"/api/playlist/(\d+)/add", path)):
+            track = self._jsonbody().get("track") or {}
+            if not track.get("id"):
+                return self._err(400, "track required")
+            db.upsert_tracks([track])  # make sure the metadata exists
+            db.add_track_to_playlist(int(m[1]), track["id"])
+            return self._json({"ok": True})
+        if method == "DELETE" and (m := re.fullmatch(rf"/api/playlist/(\d+)/track/{_VID}", path)):
+            db.remove_playlist_track(int(m[1]), m[2])
+            return self._json({"ok": True})
         if method == "GET" and path == "/api/playlists":
             return self._json(db.list_playlists())
         if method == "GET" and (m := re.fullmatch(r"/api/playlist/(\d+)", path)):

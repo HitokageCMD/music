@@ -187,6 +187,26 @@ def add_playlist_tracks(pid: int, track_ids: list[str]) -> None:
         c.commit()
 
 
+def add_track_to_playlist(pid: int, track_id: str) -> None:
+    """Append one track to a playlist (no dup, keeps order)."""
+    c = conn()
+    with _lock:
+        row = c.execute(
+            "SELECT COALESCE(MAX(pos), -1) + 1 AS n FROM playlist_tracks WHERE playlist_id=?",
+            (pid,),
+        ).fetchone()
+        c.execute(
+            "INSERT INTO playlist_tracks (playlist_id, track_id, pos) VALUES (?, ?, ?) "
+            "ON CONFLICT(playlist_id, track_id) DO NOTHING",
+            (pid, track_id, row["n"]),
+        )
+        c.commit()
+
+
+def remove_playlist_track(pid: int, track_id: str) -> None:
+    _write("DELETE FROM playlist_tracks WHERE playlist_id=? AND track_id=?", (pid, track_id))
+
+
 def list_playlists() -> list[dict]:
     rows = conn().execute(
         """
