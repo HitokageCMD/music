@@ -13,8 +13,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="tunebox">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="/static/style.css?v=20">
-<script src="/static/idb.js?v=20"></script>
+<link rel="stylesheet" href="/static/style.css?v=21">
+<script src="/static/idb.js?v=21"></script>
 </head>
 <body>
 
@@ -32,7 +32,6 @@
 
 <nav class="tabs">
   <button data-tab="recommend" class="on">发现</button>
-  <button data-tab="search">搜索</button>
   <button data-tab="library">音乐库</button>
   <span class="grow"></span>
   <button id="settingsBtn" class="settings-btn" title="设置">设置</button>
@@ -52,8 +51,8 @@
   <button id="importBtn" type="submit">导入</button>
 </form>
 
-<section id="scenes" class="scenes" hidden></section>
 <section id="discover" class="scenes" hidden></section>
+<div id="modemenu" class="modemenu" hidden></div>
 
 <main id="list"></main>
 
@@ -165,6 +164,6 @@
 </section>
 
 <audio id="audio" preload="auto"></audio>
-<script src="/static/app.js?v=20"></script>
+<script src="/static/app.js?v=21"></script>
 </body>
 </html>

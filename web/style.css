@@ -182,6 +182,17 @@ header {
   background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); cursor: pointer;
 }
 
+/* 发现页「常用 / 探索更多」的模式下拉 */
+.modemenu { margin: 0 14px 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.modeitem {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  text-align: left; padding: 10px 12px; border-radius: 12px;
+  background: var(--surface-2); border: 1px solid var(--line); cursor: pointer;
+}
+.modeitem.on { border-color: var(--accent); }
+.modeitem-name { font-size: 14px; color: var(--text); }
+.modeitem-desc { font-size: 11px; color: var(--muted); line-height: 1.3; }
+
 /* sub-filters: a quieter, secondary row under the main tabs */
 .subfilters {
   position: sticky; top: calc(var(--header-h) + var(--tabs-h)); z-index: 18;

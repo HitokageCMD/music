@@ -8,7 +8,8 @@ const state = {
   mode: 'song', // song | lyrics
   prefs: { langs: [], genres: [], dislikes: [] },
   libFilter: 'all', // all | liked | phone | playlists  (sub-filter of the 音乐库 tab)
-  discover: 0, // index into DISCOVER (0 = 为你推荐)
+  discoverView: 'recommend', // 发现页当前视图:recommend(为你推荐) | mode(某模式) | search(搜索结果)
+  activeMode: null, // 当前选中的模式 label(常用/探索),用于顶部条高亮
   playlists: [], // imported 清单 list
   openPlaylist: null, // {id, name} when viewing one playlist's tracks
   lists: { search: [], recommend: [], library: [] },
@@ -25,7 +26,6 @@ const state = {
   error: null,
   seeking: false,
   stage: false,
-  scene: null,
   lyrics: null,
   lyricIdx: -1,
   lyricHold: 0,
@@ -42,19 +42,32 @@ const esc = (s) =>
 // 发现 tab categories. First is the personalized engine; the rest are curated
 // fresh / by-language / Douyin queries (measured to return good current songs).
 // {YR} is replaced with the live year so "new songs" never goes stale.
-const DISCOVER = [
-  { label: '为你推荐', kind: 'recommend' },
-  { label: '华语新歌', kind: 'search', q: '华语新歌 {YR}' },
-  { label: '欧美新歌', kind: 'search', q: 'pop hits {YR}' },
-  { label: '粤语', kind: 'search', q: '粤语新歌 {YR}' },
-  { label: '日语', kind: 'search', q: 'j-pop hits' },
-  { label: '韩语', kind: 'search', q: 'kpop {YR}' },
-  { label: '抖音', kind: 'search', q: '抖音热歌' },
+// 发现页的模式。「常用」= 日常快捷入口;「探索更多」= 带描述的精选(以后新模式都加这里)。
+// {YR} 会替换成当前年份,让「新歌」永不过期。每个 label 映射到一条实测能出好歌的搜索词。
+const COMMON_MODES = [
+  { label: '熟悉模式', q: '华语 流行 经典 热门' },
+  { label: 'DJ模式', q: 'dj remix 车载 电子 舞曲' },
+  { label: '新鲜模式', q: '华语新歌 {YR} 欧美新歌' },
+  { label: '动感健身', q: 'workout hype gym 健身 燃' },
+  { label: '深夜EMO', q: '深夜 伤感 emo 情歌' },
+  { label: '抖音漫游', q: '抖音热歌' },
+  { label: '助眠模式', q: '助眠 轻音乐 白噪音 chill sleep' },
+  { label: '洗澡', q: 'feel good singalong pop 欢快' },
 ];
+const EXPLORE_MODES = [
+  { label: '抖音爆火中文歌', desc: '超流行的华语歌曲', q: '抖音爆火 华语 流行' },
+  { label: '热门DJ', desc: 'DJ加伤感开车巨带感', q: '伤感 dj 车载 慢摇' },
+  { label: '怀旧老歌', desc: '一个歌曲一个故事', q: '怀旧 经典 老歌 throwback' },
+  { label: '爆火翻唱', desc: '抖音爆火翻唱合集！压力给到原唱！', q: '抖音 爆火 翻唱 cover' },
+  { label: '伤感EMO', desc: '爱人的眼睛，是第八大洋', q: '伤感 emo 华语 情歌' },
+  { label: 'R&B', desc: '浪漫迷醉氛围，是夜幕降临时无法拒绝的存在', q: 'r&b 慢歌 浪漫' },
+  { label: '欧美', desc: '让你一秒沦陷英文仙品指南', q: 'pop hits english {YR}' },
+  { label: '抖音爆火燃曲', desc: '让人沸腾的音乐', q: '燃 热血 抖音 dj' },
+];
+const ALL_MODES = [...COMMON_MODES, ...EXPLORE_MODES];
 
 // Preferences. Dislikes are the strong lever: a hard title/artist keyword filter
-// applied to all discovery + auto-radio. Language biases queries and orders the
-// discover strip. Genre is a soft query hint.
+// applied to all discovery + auto-radio. Language biases queries. Genre is a soft hint.
 const PREF_LANGS = ['华语', '欧美', '日语', '韩语', '粤语'];
 const PREF_GENRES = ['流行', 'R&B', '摇滚', '电子', '民谣', '说唱', '古典', '爵士', '纯音乐'];
 const DISLIKES = [
@@ -63,23 +76,6 @@ const DISLIKES = [
   { label: '翻唱 Cover', keys: ['cover', '翻唱', '翻自'] },
   { label: '纯音乐 / 伴奏', keys: ['纯音乐', '純音樂', 'instrumental', '伴奏', '钢琴版', '鋼琴版', 'piano'] },
   { label: '儿童歌', keys: ['儿童', '兒童', '童谣', '童謠', 'kids'] },
-];
-// Which discover category belongs to which language, for reordering by preference.
-const DISCOVER_LANG = { 华语新歌: '华语', 欧美新歌: '欧美', 粤语: '粤语', 日语: '日语', 韩语: '韩语' };
-
-const SCENES = [
-  { label: '派对', q: '派对 嗨歌 party' },
-  { label: '开车', q: 'road trip driving songs 兜风' },
-  { label: '打扫', q: 'upbeat pop dance hits' },
-  { label: '洗澡', q: 'feel good singalong pop hits' },
-  { label: 'emo', q: 'emo sad songs 伤感' },
-  { label: '专注', q: 'lofi study beats focus' },
-  { label: '运动', q: 'workout hype gym songs' },
-  { label: '睡前', q: 'chill sleep calm music' },
-  { label: '咖啡馆', q: 'cafe jazz bossa nova' },
-  { label: '下雨', q: 'rainy day chill 慢歌' },
-  { label: '浪漫', q: '浪漫 情歌 love songs' },
-  { label: '怀旧', q: '怀旧 经典 throwback 2000s' },
 ];
 
 const fmt = (s) => {
@@ -385,9 +381,11 @@ function closeSettings() {
   $('#settings').hidden = true;
   savePrefs();
   // Re-run whatever's on screen so the new prefs take effect immediately.
-  if (state.tab === 'recommend') runDiscover(state.discover);
-  else if (state.tab === 'library') loadLibrary();
-  else if (state.scene) { const s = SCENES.find((x) => x.label === state.scene); if (s) runScene(s); }
+  if (state.tab === 'recommend') {
+    if (state.discoverView === 'mode') { const m = ALL_MODES.find((x) => x.label === state.activeMode); m ? runMode(m) : runRecommend(); }
+    else if (state.discoverView === 'search') render(); // 保留搜索结果,不重复搜
+    else runRecommend();
+  } else if (state.tab === 'library') loadLibrary();
 }
 
 function render() {
@@ -407,16 +405,17 @@ function render() {
          <button class="plrename" id="plrename" title="重命名">改名</button></div>` : '';
   const items = state.lists[state.tab];
   if (!items.length) {
-    let key = state.tab;
-    if (state.tab === 'search') {
-      if (!state.online) key = 'offlineSearch';
-      else if (state.mode === 'lyrics' && $('#q').value.trim()) key = 'lyrics';
+    let key = state.tab; // recommend | library
+    if (state.tab === 'recommend') {
+      if (state.discoverView === 'search') {
+        key = !state.online ? 'offlineSearch'
+            : (state.mode === 'lyrics' && $('#q').value.trim()) ? 'lyrics' : 'search';
+      } else if (state.discoverView === 'mode') {
+        key = 'discover'; // 某个模式暂时没歌
+      } // 否则 'recommend'
     } else if (state.tab === 'library') {
       key = state.libFilter; // all | liked | phone
-    } else if (state.tab === 'recommend' && state.discover !== 0) {
-      key = 'discover'; // a curated category, not personalized
-    } else if (inPlaylists && state.openPlaylist) {
-      key = 'emptyPlaylist';
+      if (inPlaylists && state.openPlaylist) key = 'emptyPlaylist';
     }
     const [a, b] = EMPTY[key];
     list.innerHTML = back + `<div class="empty"><b>${a}</b>${b}</div>`;
@@ -466,13 +465,15 @@ function importableUrl(q) {
 async function doSearch(q) {
   const url = importableUrl(q);
   if (url) return importUrl(url);
-  state.tab = 'search';
-  state.scene = null; // a typed search clears any active scene
+  state.tab = 'recommend';        // 搜索结果就显示在「发现」页里,不再是独立 tab
+  state.discoverView = 'search';
+  state.activeMode = null;
+  closeModeMenu(); renderDiscoverBar();
   state.loading = true; state.error = null;
   syncTabs(); render();
   const path = state.mode === 'lyrics' ? '/api/search/lyrics' : '/api/search';
   try {
-    state.lists.search = applyPrefs(await api(`${path}?q=${encodeURIComponent(q)}`));
+    state.lists.recommend = applyPrefs(await api(`${path}?q=${encodeURIComponent(q)}`));
   } catch (e) {
     state.error = e.message;
   }
@@ -480,78 +481,70 @@ async function doSearch(q) {
   render();
 }
 
-async function runScene(s) {
-  state.tab = 'search';
-  state.mode = 'song';
-  state.scene = s.label;
-  $('#q').value = '';
-  $('#q').placeholder = `${s.label} — 换个心情？`;
-  document.querySelectorAll('#mode button').forEach((b) =>
-    b.classList.toggle('on', b.dataset.mode === 'song'));
-  renderScenes();
+// 发现页三种视图(为你推荐 / 某模式 / 搜索结果)都渲染到同一个 #list,共用 state.lists.recommend。
+async function runRecommend() {
+  state.tab = 'recommend';
+  state.discoverView = 'recommend';
+  state.activeMode = null;
+  closeModeMenu(); renderDiscoverBar();
   state.loading = true; state.error = null;
   syncTabs(); render();
-  const q = `${s.q} ${prefHint()}`.trim(); // bias the scene by language/genre prefs
   try {
-    state.lists.search = applyPrefs(await api(`/api/search?q=${encodeURIComponent(q)}&limit=40`));
-  } catch (e) {
-    state.error = e.message;
-  }
-  state.loading = false;
-  render();
+    // 为你推荐 honors prefs: drop disliked, then bias toward preferred language.
+    state.lists.recommend = biasByLang(applyPrefs(await api('/api/recommend')));
+  } catch (e) { state.error = e.message; }
+  state.loading = false; render();
 }
 
-function renderScenes() {
-  const box = $('#scenes');
-  // Only on the search tab, song mode — a discovery strip, not a permanent fixture.
-  const show = state.tab === 'search' && state.mode === 'song';
-  box.hidden = !show;
-  if (!show) return;
-  box.innerHTML = SCENES.map((s, i) =>
-    `<button class="scene${state.scene === s.label ? ' on' : ''}" data-scene="${i}">${esc(s.label)}</button>`).join('');
+async function runMode(m) {
+  state.tab = 'recommend';
+  state.discoverView = 'mode';
+  state.activeMode = m.label;
+  state.mode = 'song';
+  $('#q').value = '';
+  closeModeMenu(); renderDiscoverBar();
+  state.loading = true; state.error = null;
+  syncTabs(); render();
+  const q = `${m.q.replace('{YR}', new Date().getFullYear())} ${prefHint()}`.trim();
+  try {
+    state.lists.recommend = applyPrefs(await api(`/api/search?q=${encodeURIComponent(q)}&limit=40`));
+  } catch (e) { state.error = e.message; }
+  state.loading = false; render();
 }
 
 async function loadList(tab) {
   if (tab === 'library') return loadLibrary();
-  if (tab === 'recommend') return runDiscover(state.discover);
+  return runRecommend(); // 发现 tab 落地为「为你推荐」
 }
 
-async function runDiscover(i) {
-  state.discover = i;
-  state.tab = 'recommend';
-  const d = DISCOVER[i];
-  renderDiscover();
-  state.loading = true; state.error = null;
-  render();
-  try {
-    if (d.kind === 'recommend') {
-      // 为你推荐 honors prefs: drop disliked, then bias toward preferred language.
-      state.lists.recommend = biasByLang(applyPrefs(await api('/api/recommend')));
-    } else {
-      const q = d.q.replace('{YR}', new Date().getFullYear());
-      state.lists.recommend = applyPrefs(await api(`/api/search?q=${encodeURIComponent(q)}&limit=40`));
-    }
-  } catch (e) {
-    state.error = e.message;
-  }
-  state.loading = false;
-  render();
-}
-
-function renderDiscover() {
+// 发现页顶部入口条:为你推荐 | 常用▾ | 探索更多▾
+function renderDiscoverBar() {
   const box = $('#discover');
   box.hidden = state.tab !== 'recommend';
   if (box.hidden) return;
-  // Float the user's preferred-language categories up (为你推荐 stays first).
-  const pref = new Set(state.prefs.langs);
-  const order = DISCOVER.map((_, i) => i).sort((a, b) => {
-    if (a === 0 || b === 0) return a - b;
-    return (pref.has(DISCOVER_LANG[DISCOVER[a].label]) ? 0 : 1)
-         - (pref.has(DISCOVER_LANG[DISCOVER[b].label]) ? 0 : 1);
-  });
-  box.innerHTML = order.map((i) =>
-    `<button class="scene${state.discover === i ? ' on' : ''}" data-disc="${i}">${esc(DISCOVER[i].label)}</button>`).join('');
+  const inCommon = state.discoverView === 'mode' && COMMON_MODES.some((m) => m.label === state.activeMode);
+  const inExplore = state.discoverView === 'mode' && EXPLORE_MODES.some((m) => m.label === state.activeMode);
+  box.innerHTML =
+    `<button class="scene${state.discoverView === 'recommend' ? ' on' : ''}" data-view="recommend">为你推荐</button>` +
+    `<button class="scene${inCommon ? ' on' : ''}" data-menu="common">常用 ▾</button>` +
+    `<button class="scene${inExplore ? ' on' : ''}" data-menu="explore">探索更多 ▾</button>`;
 }
+
+// 展开「常用 / 探索更多」的模式下拉;再点同一个入口收起
+function openModeMenu(which) {
+  const menu = $('#modemenu');
+  if (!menu) return;
+  if (!menu.hidden && menu.dataset.which === which) { closeModeMenu(); return; }
+  const list = which === 'common' ? COMMON_MODES : EXPLORE_MODES;
+  menu.dataset.which = which;
+  menu.innerHTML = list.map((m, i) =>
+    `<button class="modeitem${m.label === state.activeMode ? ' on' : ''}" data-mode="${which}:${i}">` +
+      `<span class="modeitem-name">${esc(m.label)}</span>` +
+      (m.desc ? `<span class="modeitem-desc">${esc(m.desc)}</span>` : '') +
+    `</button>`).join('');
+  menu.hidden = false;
+}
+function closeModeMenu() { const m = $('#modemenu'); if (m) m.hidden = true; }
 
 async function loadLibrary() {
   // 已下载 is device-local (IndexedDB, works offline); 全部/收藏 come from the server.
@@ -1150,7 +1143,6 @@ document.querySelectorAll('#mode button').forEach((b) =>
     state.mode = b.dataset.mode;
     document.querySelectorAll('#mode button').forEach((x) => x.classList.toggle('on', x === b));
     $('#q').placeholder = PLACEHOLDER[state.mode];
-    renderScenes(); // scenes only make sense in song mode
     save();
     const q = $('#q').value.trim();
     if (q) doSearch(q);
@@ -1162,8 +1154,7 @@ document.querySelectorAll('.tabs button[data-tab]').forEach((b) =>
     state.tab = b.dataset.tab;
     syncTabs();
     syncChrome();
-    if (state.tab === 'search') render();
-    else loadList(state.tab);
+    loadList(state.tab);
   }));
 
 // Sub-filters of the 音乐库 tab: 全部 / 收藏 / 已下载.
@@ -1177,13 +1168,12 @@ document.querySelectorAll('#subfilters button[data-filter]').forEach((b) =>
     loadLibrary();
   }));
 
-// Show the scene strip on search/song, the discover strip on 发现,
-// the sub-filters on 音乐库, the import bar on 音乐库›歌单 (list view).
+// 发现页显示模式入口条,音乐库显示子过滤,歌单列表显示导入栏。
 function syncChrome() {
-  renderScenes();
-  renderDiscover();
+  renderDiscoverBar();
   $('#subfilters').hidden = state.tab !== 'library';
   $('#importbar').hidden = !(state.tab === 'library' && state.libFilter === 'playlists' && !state.openPlaylist);
+  if (state.tab !== 'recommend') closeModeMenu();
 }
 
 $('#importbar').addEventListener('submit', (e) => {
@@ -1192,9 +1182,21 @@ $('#importbar').addEventListener('submit', (e) => {
   if (url) importUrl(url);
 });
 
-$('#scenes').addEventListener('click', (e) => {
-  const chip = e.target.closest('[data-scene]');
-  if (chip) runScene(SCENES[+chip.dataset.scene]);
+$('#discover').addEventListener('click', (e) => {
+  const view = e.target.closest('[data-view]');
+  const menu = e.target.closest('[data-menu]');
+  if (view) runRecommend();
+  else if (menu) openModeMenu(menu.dataset.menu);
+});
+$('#modemenu').addEventListener('click', (e) => {
+  const it = e.target.closest('[data-mode]');
+  if (!it) return;
+  const [which, i] = it.dataset.mode.split(':');
+  runMode((which === 'common' ? COMMON_MODES : EXPLORE_MODES)[+i]);
+});
+// 点入口和下拉以外的地方,收起模式菜单
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#modemenu') && !e.target.closest('[data-menu]')) closeModeMenu();
 });
 
 $('#settingsBtn').addEventListener('click', () => openSettings());
@@ -1211,11 +1213,6 @@ $('#settings').addEventListener('click', (e) => {
   if (i >= 0) arr.splice(i, 1); else arr.push(b.dataset.val);
   b.classList.toggle('on');
   savePrefs();
-});
-
-$('#discover').addEventListener('click', (e) => {
-  const chip = e.target.closest('[data-disc]');
-  if (chip) runDiscover(+chip.dataset.disc);
 });
 
 $('#list').addEventListener('click', async (e) => {
