@@ -1,7 +1,7 @@
 [project]
 name = "tunebox"
 version = "0.1.0"
-description = "Self-hosted, ad-free music player with background playback"
+description = "Self-hosted personal music player"
 requires-python = ">=3.13"
 # Pure Python only — no compiled dependencies. The server is stdlib http.server,
 # so the whole runtime is these three plus their pure-Python deps. That's what

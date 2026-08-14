@@ -1,7 +1,7 @@
 {
   "name": "tunebox",
   "short_name": "tunebox",
-  "description": "Self-hosted, ad-free music player",
+  "description": "Self-hosted personal music player / 本地音乐播放器",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

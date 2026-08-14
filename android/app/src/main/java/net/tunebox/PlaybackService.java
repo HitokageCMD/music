@@ -172,8 +172,8 @@ public class PlaybackService extends Service {
                         MediaButtonReceiver.buildMediaButtonPendingIntent(
                                 this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT)))
                 .addAction(new NotificationCompat.Action(
-                        liked ? android.R.drawable.btn_star_big_on : android.R.drawable.btn_star_big_off,
-                        liked ? "已收藏" : "喜欢",
+                        liked ? R.drawable.ic_heart_filled : R.drawable.ic_heart_outline,
+                        liked ? "已喜欢" : "喜欢",
                         PendingIntent.getService(this, 1,
                                 new Intent(this, PlaybackService.class).setAction(ACTION_LIKE),
                                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)))

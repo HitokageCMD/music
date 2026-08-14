@@ -64,7 +64,7 @@ public class MainActivity extends ComponentActivity {
             public void next()  { runJs("window.__tuneboxNext && window.__tuneboxNext();"); }
             public void prev()  { runJs("window.__tuneboxPrev && window.__tuneboxPrev();"); }
             public void seek(long ms) { runJs("window.__tuneboxSeek && window.__tuneboxSeek(" + ms + ");"); }
-            public void like() { runJs("window.__tuneboxLike && window.__tuneboxLike();"); }
+            public void like() { runJs("window.__tuneboxLikeOn && window.__tuneboxLikeOn();"); }
         });
 
         // Keeps the process alive when backgrounded, and now carries the media

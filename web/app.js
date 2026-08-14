@@ -1159,6 +1159,17 @@ window.__tuneboxNext = () => next();
 window.__tuneboxPrev = () => prev();
 window.__tuneboxSeek = (ms) => { if (isFinite(audio.duration)) audio.currentTime = ms / 1000; };
 window.__tuneboxLike = () => { const b = document.getElementById('likeBtn'); if (b) b.click(); };
+// 锁屏/通知的喜欢:只加收藏、不取消(避免点两次搞不清状态)。取消到 app 里点 ♥。
+window.__tuneboxLikeOn = () => {
+  if (!state.current) return;
+  if (!state.current.liked) {
+    state.current.liked = true;
+    state.current.disliked = false;
+    renderNP();
+    api(`/api/like/${state.current.id}?liked=true`, { method: 'POST' }).catch(() => {});
+  }
+  pushMedia(true); // 同步通知图标(实心❤)
+};
 
 let _lastPush = 0;
 function pushMedia(force) {
