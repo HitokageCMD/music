@@ -418,8 +418,8 @@ function render() {
       if (state.discoverView === 'search') {
         key = !state.online ? 'offlineSearch'
             : (state.mode === 'lyrics' && $('#q').value.trim()) ? 'lyrics' : 'search';
-      } else if (state.discoverView === 'mode') {
-        key = 'discover'; // 某个模式暂时没歌
+      } else if (state.discoverView === 'mode' || state.discoverView === 'random' || state.discoverView === 'artist') {
+        key = 'discover'; // 模式/随机/歌手暂时没歌
       } // 否则 'recommend'
     } else if (state.tab === 'library') {
       key = state.libFilter; // all | liked | phone
@@ -555,7 +555,32 @@ async function loadFollowing() {
   try { state.following = new Set(await api('/api/artists')); } catch {}
 }
 
-// 发现页顶部入口条:为你推荐 | 常用▾ | 探索更多▾ | 关注▾(有关注时)
+// 随机播放:随机挑一个模式搜一批歌、打乱后直接开始放 —— 点一下就有的「随便听」
+async function runRandom() {
+  state.tab = 'recommend';
+  state.discoverView = 'random';
+  state.activeMode = null;
+  closeModeMenu(); renderDiscoverBar();
+  state.loading = true; state.error = null;
+  syncTabs(); render();
+  const pool = [...COMMON_MODES, ...EXPLORE_MODES];
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  const q = `${pick.q.replace('{YR}', new Date().getFullYear())} ${prefHint()}`.trim();
+  try {
+    const list = applyPrefs(await api(`/api/search?q=${encodeURIComponent(q)}&limit=40`));
+    for (let i = list.length - 1; i > 0; i--) { // Fisher–Yates 打乱
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    state.lists.recommend = list;
+    state.loading = false; render();
+    if (list.length) playFrom(list, 0); // 直接开始放第一首
+  } catch (e) {
+    state.error = e.message; state.loading = false; render();
+  }
+}
+
+// 发现页顶部入口条:为你推荐 | 随机 | 常用▾ | 探索更多▾ | 关注▾
 function renderDiscoverBar() {
   const box = $('#discover');
   box.hidden = state.tab !== 'recommend';
@@ -574,6 +599,7 @@ function renderDiscoverBar() {
   const inExplore = state.discoverView === 'mode' && EXPLORE_MODES.some((m) => m.label === state.activeMode);
   box.innerHTML =
     `<button class="scene${state.discoverView === 'recommend' ? ' on' : ''}" data-view="recommend">为你推荐</button>` +
+    `<button class="scene${state.discoverView === 'random' ? ' on' : ''}" data-view="random">🎲 随机</button>` +
     `<button class="scene${inCommon ? ' on' : ''}" data-menu="common">常用 ▾</button>` +
     `<button class="scene${inExplore ? ' on' : ''}" data-menu="explore">探索更多 ▾</button>` +
     (state.following.size ? `<button class="scene" data-menu="following">关注 ▾</button>` : '');
@@ -1290,7 +1316,7 @@ $('#discover').addEventListener('click', (e) => {
   const menu = e.target.closest('[data-menu]');
   const follow = e.target.closest('[data-follow]');
   if (follow) toggleFollow(follow.dataset.follow);
-  else if (view) runRecommend();
+  else if (view) { view.dataset.view === 'random' ? runRandom() : runRecommend(); }
   else if (menu) openModeMenu(menu.dataset.menu);
 });
 $('#modemenu').addEventListener('click', (e) => {
@@ -1455,8 +1481,19 @@ audio.addEventListener('pause', () => {
 });
 audio.addEventListener('ended', () => next(true));
 audio.addEventListener('loadedmetadata', () => { $('#dur').textContent = fmt(audio.duration); syncPosition(); });
+let _failStreak = 0;
+audio.addEventListener('playing', () => { _failStreak = 0; }); // 正常播了就清零
 audio.addEventListener('error', () => {
-  if (audio.src) $('#dlState').textContent = '播放失败';
+  if (!audio.src) return;
+  // 有些歌受地区/会员限制取不到流(后端 502)→ 自动跳下一首,别卡在 0:00;
+  // 连续失败到上限就停,避免整列都放不了时死循环。
+  if (state.queue.length > 1 && _failStreak < 6) {
+    _failStreak++;
+    $('#dlState').textContent = '这首放不了，跳下一首';
+    setTimeout(() => next(true), 900);
+  } else {
+    $('#dlState').textContent = '播放失败';
+  }
 });
 
 audio.addEventListener('timeupdate', () => {
