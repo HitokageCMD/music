@@ -7,3 +7,5 @@ data/
 
 # built APK — deliver out-of-band, do not commit
 tunebox-*.apk
+b.log
+*.log
