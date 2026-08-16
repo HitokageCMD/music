@@ -430,7 +430,10 @@ function render() {
     return;
   }
   const dlbar = (state.tab === 'library' && state.libFilter === 'phone') ? dlBarHTML() : '';
-  list.innerHTML = back + dlbar + items.map(rowHTML).join('');
+  // 音乐库各列表(收藏/已下载/歌单/全部)顶部:一键随机播放这些歌(像常规音乐 App)
+  const canShuffle = state.tab === 'library' && !state.selecting && items.length > 1;
+  const rb = canShuffle ? `<button class="randombtn" id="shufflePlay">🔀 随机播放 (${items.length})</button>` : '';
+  list.innerHTML = back + rb + dlbar + items.map(rowHTML).join('');
   paintArt(list);
 }
 
@@ -887,7 +890,27 @@ function playFrom(list, i) {
   loadTrack(state.queue[i]);
 }
 
+// 一键随机播放:把当前这批歌打乱、开随机模式、从头放(音乐库列表用,像常规音乐 App)
+function shuffleAndPlay(list) {
+  if (!list || !list.length) return;
+  const s = list.slice();
+  for (let i = s.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [s[i], s[j]] = [s[j], s[i]]; }
+  state.shuffle = true; save(); renderNP();
+  playFrom(s, 0);
+}
+
+// 下滑刷新:重新拉当前视图
+function refreshCurrent() {
+  if (state.tab === 'library') loadLibrary();
+  else if (state.discoverView === 'artist') runArtist(state.activeMode);
+  else if (state.discoverView === 'mode') { const m = ALL_MODES.find((x) => x.label === state.activeMode); m ? runMode(m) : runRecommend(); }
+  else if (state.discoverView === 'random') runRandom();
+  else if (state.discoverView === 'search') { const q = $('#q').value.trim(); q ? doSearch(q) : runRecommend(); }
+  else runRecommend();
+}
+
 let srcURL = null; // live blob URL, if any — must be revoked or the blob leaks
+let _loadTimer = null; // 加载超时计时器(0:00 卡死的兜底)
 
 async function loadTrack(t) {
   state.current = t;
@@ -911,6 +934,18 @@ async function loadTrack(t) {
   }
   srcURL = local;
   audio.src = local || `/api/stream/${t.id}`;
+
+  // 在线流:15 秒还没出时长/没进度就当作卡住,自动跳下一首(0:00 卡死的兜底)
+  clearTimeout(_loadTimer);
+  if (!local) {
+    const tid = t.id;
+    _loadTimer = setTimeout(() => {
+      if (state.current?.id === tid && !(isFinite(audio.duration) && audio.duration > 0) && audio.currentTime === 0) {
+        if (state.queue.length > 1) { $('#dlState').textContent = '加载超时，跳下一首'; next(true); }
+        else $('#dlState').textContent = '加载超时';
+      }
+    }, 15000);
+  }
 
   try {
     await audio.play();
@@ -1348,6 +1383,7 @@ $('#settings').addEventListener('click', (e) => {
 });
 
 $('#list').addEventListener('click', async (e) => {
+  if (e.target.closest('#shufflePlay')) { shuffleAndPlay(state.lists[state.tab]); return; }
   // 已下载管理条按钮
   const dlact = e.target.closest('[data-dlact]');
   if (dlact) {
@@ -1480,9 +1516,9 @@ audio.addEventListener('pause', () => {
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
 });
 audio.addEventListener('ended', () => next(true));
-audio.addEventListener('loadedmetadata', () => { $('#dur').textContent = fmt(audio.duration); syncPosition(); });
+audio.addEventListener('loadedmetadata', () => { clearTimeout(_loadTimer); $('#dur').textContent = fmt(audio.duration); syncPosition(); });
 let _failStreak = 0;
-audio.addEventListener('playing', () => { _failStreak = 0; }); // 正常播了就清零
+audio.addEventListener('playing', () => { _failStreak = 0; clearTimeout(_loadTimer); }); // 正常播了就清零
 audio.addEventListener('error', () => {
   if (!audio.src) return;
   // 有些歌受地区/会员限制取不到流(后端 502)→ 自动跳下一首,别卡在 0:00;
@@ -1528,6 +1564,22 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'ArrowLeft') audio.currentTime -= 5;
   else if (k === '/') { e.preventDefault(); $('#q').focus(); }
 });
+
+// 下滑刷新:整页滚到顶时再下拉 → 重新拉当前视图(设置/歌词/歌单弹层打开时不触发)
+let _ptrY0 = 0, _ptrActive = false;
+window.addEventListener('touchstart', (e) => {
+  const overlayOpen = !$('#settings').hidden || !$('#stage').hidden || !$('#picker').hidden;
+  _ptrActive = !overlayOpen && window.scrollY <= 0;
+  _ptrY0 = e.touches[0].clientY;
+}, { passive: true });
+window.addEventListener('touchmove', (e) => {
+  if (_ptrActive && e.touches[0].clientY - _ptrY0 > 90) {
+    _ptrActive = false;
+    $('#dlState').textContent = '刷新中…';
+    refreshCurrent();
+  }
+}, { passive: true });
+window.addEventListener('touchend', () => { _ptrActive = false; });
 
 /* ---------- prefs ---------- */
 

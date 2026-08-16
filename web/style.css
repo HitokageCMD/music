@@ -215,6 +215,15 @@ header {
 .artist-link { cursor: pointer; }
 .artist-link:hover { color: var(--text); text-decoration: underline; }
 
+/* 一键随机播放当前列表 */
+.randombtn {
+  display: block; width: calc(100% - 20px); margin: 4px 10px 10px;
+  padding: 11px; border-radius: 10px; cursor: pointer; text-align: center;
+  background: var(--accent-dim); color: var(--accent);
+  border: 1px solid var(--accent); font-size: 14px; font-weight: 600;
+}
+.randombtn:active { transform: scale(.99); }
+
 /* sub-filters: a quieter, secondary row under the main tabs */
 .subfilters {
   position: sticky; top: calc(var(--header-h) + var(--tabs-h)); z-index: 18;
