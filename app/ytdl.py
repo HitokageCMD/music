@@ -44,9 +44,9 @@ YDL_OPTS = {
     # so the byte count yt-dlp reports matches what we actually cache. That is
     # what makes HTTP Range (seeking) work while the file is still downloading.
     "postprocessors": [],
-    # YouTube 对 web 客户端的流地址常返回 403(需要 nsig 解密,旧 yt-dlp 会算错)。
-    # 优先用 ios/android/tv 客户端——它们的流地址不需 nsig,能绕开大量 403。
-    "extractor_args": {"youtube": {"player_client": ["web", "android", "ios"]}},
+    # 不写死 player_client,交给 yt-dlp 默认策略(团队维护、随 YouTube 变化更新)。
+    # YouTube 现在要 po_token 才给纯音频轨,不带就只有含视频的合并流(itag 18);
+    # 该流后台会被系统释放视频解码器而停。稳定纯音频/后台播放需登录(cookies)。
 }
 
 MIME = {
