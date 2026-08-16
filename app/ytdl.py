@@ -44,6 +44,9 @@ YDL_OPTS = {
     # so the byte count yt-dlp reports matches what we actually cache. That is
     # what makes HTTP Range (seeking) work while the file is still downloading.
     "postprocessors": [],
+    # YouTube 对 web 客户端的流地址常返回 403(需要 nsig 解密,旧 yt-dlp 会算错)。
+    # 优先用 ios/android/tv 客户端——它们的流地址不需 nsig,能绕开大量 403。
+    "extractor_args": {"youtube": {"player_client": ["web", "android", "ios"]}},
 }
 
 MIME = {
@@ -96,19 +99,27 @@ def search(query: str, limit: int = 25) -> list[dict]:
 
 
 def _pick_audio(info: dict) -> dict:
-    """Choose the best audio-only format, preferring m4a for browser compat."""
-    fmts = [
-        f
-        for f in info.get("formats", [])
-        if f.get("url")
-        and f.get("acodec") not in (None, "none")
-        and f.get("vcodec") in (None, "none")
-    ]
+    """Pick a playable stream with audio, preferring pure-audio m4a.
+
+    换 player_client 后各客户端给的格式差别很大,必须过滤成 progressive https
+    (能 HTTP Range 边下边播),排除 HLS/DASH 分段流(<audio> 直接播不了)。优先纯音频
+    省流量;没有纯音频再回退到带音频的合并流(总比取不到强 —— 就是之前的 0:00)。
+    """
+    def ok(f):
+        proto = f.get("protocol") or ""
+        return (bool(f.get("url"))
+                and f.get("acodec") not in (None, "none")
+                and proto.startswith("https")
+                and "m3u8" not in proto and "dash" not in proto)
+    fmts = [f for f in info.get("formats", []) if ok(f)]
     if not fmts:
         raise RuntimeError("no audio-only format available")
-    # m4a/AAC beats a higher-bitrate opus stream: Safari and iOS cannot play opus,
-    # and this has to work on a phone.
-    fmts.sort(key=lambda f: (f.get("ext") == "m4a", f.get("abr") or 0), reverse=True)
+    # m4a/AAC beats opus (Safari/iOS can't play opus). 纯音频优先于合并流。
+    fmts.sort(key=lambda f: (
+        f.get("vcodec") in (None, "none"),
+        f.get("ext") == "m4a",
+        f.get("abr") or 0,
+    ), reverse=True)
     return fmts[0]
 
 

@@ -11,8 +11,8 @@ android {
         applicationId 'net.tunebox'
         minSdk 26
         targetSdk 34
-        versionCode 19
-        versionName '1.2'
+        versionCode 21
+        versionName '1.3'
 
         // The user's phone is arm64. One ABI keeps the APK small and the build
         // fast; add 'armeabi-v7a' / 'x86_64' here if it must run elsewhere.
@@ -23,7 +23,8 @@ android {
             version '3.12'
             pip {
                 // Pure-Python, no compiled deps — the whole point of the refactor.
-                install 'yt-dlp'
+                // 版本下限 = 强制 Chaquopy 重新拉最新 yt-dlp(YouTube 常改签名,旧版会 403)。
+                install 'yt-dlp>=2026.6'
                 install 'ytmusicapi'
                 install 'httpx'
             }
